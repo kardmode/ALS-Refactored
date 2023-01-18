@@ -1,10 +1,11 @@
 #include "AlsCameraComponent.h"
 
 #include "AlsCameraSettings.h"
-#include "AlsCharacter.h"
 #include "DrawDebugHelpers.h"
 #include "Animation/AnimInstance.h"
 #include "Components/CapsuleComponent.h"
+#include "GameFramework/Character.h"
+#include "GameFramework/WorldSettings.h"
 #include "Utility/AlsCameraConstants.h"
 #include "Utility/AlsMacros.h"
 #include "Utility/AlsUtility.h"
@@ -20,7 +21,7 @@ UAlsCameraComponent::UAlsCameraComponent()
 
 void UAlsCameraComponent::OnRegister()
 {
-	Character = Cast<AAlsCharacter>(GetOwner());
+	Character = Cast<ACharacter>(GetOwner());
 
 	Super::OnRegister();
 }
@@ -38,6 +39,13 @@ void UAlsCameraComponent::Activate(const bool bReset)
 	TickCamera(0.0f, false);
 }
 
+void UAlsCameraComponent::InitAnim(const bool bForceReinitialize)
+{
+	Super::InitAnim(bForceReinitialize);
+
+	AnimationInstance = GetAnimInstance();
+}
+
 void UAlsCameraComponent::BeginPlay()
 {
 	ALS_ENSURE(IsValid(GetAnimInstance()));
@@ -47,8 +55,20 @@ void UAlsCameraComponent::BeginPlay()
 	Super::BeginPlay();
 }
 
-void UAlsCameraComponent::TickComponent(const float DeltaTime, const ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+void UAlsCameraComponent::TickComponent(float DeltaTime, const ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
+	if (IsValid(Settings) && Settings->bIgnoreTimeDilation)
+	{
+		// Use the previous global time dilation, as this frame's delta time may not yet be affected
+		// by the current global time dilation, and thus unscaling will produce the wrong delta time.
+
+		const auto TimeDilation{PreviousGlobalTimeDilation * GetOwner()->CustomTimeDilation};
+
+		DeltaTime = TimeDilation > SMALL_NUMBER ? DeltaTime / TimeDilation : GetWorld()->DeltaRealTimeSeconds;
+	}
+
+	PreviousGlobalTimeDilation = GetWorld()->GetWorldSettings()->GetEffectiveTimeDilation();
+
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
 	TickCamera(DeltaTime);
@@ -91,6 +111,8 @@ void UAlsCameraComponent::GetViewInfo(FMinimalViewInfo& ViewInfo) const
 
 void UAlsCameraComponent::TickCamera(const float DeltaTime, const bool bAllowLag)
 {
+	DECLARE_SCOPE_CYCLE_COUNTER(TEXT("UAlsCameraComponent::TickCamera()"), STAT_UAlsCameraComponent_TickCamera, STATGROUP_Als)
+
 	if (!IsValid(GetAnimInstance()) || !IsValid(Settings) || !IsValid(Character))
 	{
 		return;
@@ -104,13 +126,7 @@ void UAlsCameraComponent::TickCamera(const float DeltaTime, const bool bAllowLag
 
 	// Calculate camera rotation.
 
-	const auto CameraTargetRotation{
-		Character->GetViewState().NetworkSmoothing.bEnabled || Character->IsLocallyControlled()
-			? Character->GetViewState().NetworkSmoothing.Rotation
-			: Character->GetViewState().Rotation
-	};
-
-	CameraRotation = CalculateCameraRotation(CameraTargetRotation, DeltaTime, bAllowLag);
+	const auto CameraTargetRotation{Character->GetViewRotation()};
 
 	const auto PivotTargetTransform{GetThirdPersonPivotTransform()};
 
@@ -123,9 +139,12 @@ void UAlsCameraComponent::TickCamera(const float DeltaTime, const bool bAllowLag
 		PivotLocation = PivotTargetLocation;
 
 		CameraLocation = GetFirstPersonCameraLocation();
+		CameraRotation = CameraTargetRotation;
 		CameraFov = Settings->FirstPerson.Fov;
 		return;
 	}
+
+	CameraRotation = CalculateCameraRotation(CameraTargetRotation, DeltaTime, bAllowLag);
 
 	const FRotator CameraYawRotation{0.0f, CameraRotation.Yaw, 0.0f};
 
@@ -299,7 +318,7 @@ FVector UAlsCameraComponent::CalculatePivotOffset(const FQuat& PivotTargetRotati
 			GetAnimInstance()->GetCurveValue(UAlsCameraConstants::PivotOffsetXCurve()),
 			GetAnimInstance()->GetCurveValue(UAlsCameraConstants::PivotOffsetYCurve()),
 			GetAnimInstance()->GetCurveValue(UAlsCameraConstants::PivotOffsetZCurve())
-		} * Character->GetCapsuleComponent()->GetComponentScale().Z);
+		} * Character->GetMesh()->GetComponentScale().Z);
 }
 
 FVector UAlsCameraComponent::CalculateCameraOffset() const
@@ -309,7 +328,7 @@ FVector UAlsCameraComponent::CalculateCameraOffset() const
 			GetAnimInstance()->GetCurveValue(UAlsCameraConstants::CameraOffsetXCurve()),
 			GetAnimInstance()->GetCurveValue(UAlsCameraConstants::CameraOffsetYCurve()),
 			GetAnimInstance()->GetCurveValue(UAlsCameraConstants::CameraOffsetZCurve())
-		} * Character->GetCapsuleComponent()->GetComponentScale().Z);
+		} * Character->GetMesh()->GetComponentScale().Z);
 }
 
 FVector UAlsCameraComponent::CalculateCameraTrace(const FVector& CameraTargetLocation, const FVector& PivotOffset,
@@ -321,7 +340,7 @@ FVector UAlsCameraComponent::CalculateCameraTrace(const FVector& CameraTargetLoc
 	const auto bDisplayDebugCameraTraces{false};
 #endif
 
-	const auto CapsuleScale{Character->GetCapsuleComponent()->GetComponentScale().Z};
+	const auto MeshScale{Character->GetMesh()->GetComponentScale().Z};
 
 	static const FName MainTraceTag{FString::Format(TEXT("{0} (Main Trace)"), {ANSI_TO_TCHAR(__FUNCTION__)})};
 
@@ -335,7 +354,7 @@ FVector UAlsCameraComponent::CalculateCameraTrace(const FVector& CameraTargetLoc
 	const auto TraceEnd{CameraTargetLocation};
 
 	const auto TraceChanel{UEngineTypes::ConvertToCollisionChannel(Settings->ThirdPerson.TraceChannel)};
-	const auto CollisionShape{FCollisionShape::MakeSphere(Settings->ThirdPerson.TraceRadius * CapsuleScale)};
+	const auto CollisionShape{FCollisionShape::MakeSphere(Settings->ThirdPerson.TraceRadius * MeshScale)};
 
 	auto TraceResult{TraceEnd};
 
@@ -363,7 +382,7 @@ FVector UAlsCameraComponent::CalculateCameraTrace(const FVector& CameraTargetLoc
 #if ENABLE_DRAW_DEBUG
 	if (bDisplayDebugCameraTraces)
 	{
-		UAlsUtility::DrawDebugSweptSphere(GetWorld(), TraceStart, TraceResult, Settings->ThirdPerson.TraceRadius * CapsuleScale,
+		UAlsUtility::DrawDebugSweptSphere(GetWorld(), TraceStart, TraceResult, Settings->ThirdPerson.TraceRadius * MeshScale,
 		                                  Hit.IsValidBlockingHit() ? FLinearColor::Red : FLinearColor::Green);
 	}
 #endif
@@ -399,10 +418,10 @@ bool UAlsCameraComponent::TryFindBlockingGeometryAdjustedLocation(FVector& Locat
 {
 	// Based on ComponentEncroachesBlockingGeometry_WithAdjustment().
 
-	const auto CapsuleScale{Character->GetCapsuleComponent()->GetComponentScale().Z};
+	const auto MeshScale{Character->GetMesh()->GetComponentScale().Z};
 
 	const auto TraceChanel{UEngineTypes::ConvertToCollisionChannel(Settings->ThirdPerson.TraceChannel)};
-	const auto CollisionShape{FCollisionShape::MakeSphere((Settings->ThirdPerson.TraceRadius + 1.0f) * CapsuleScale)};
+	const auto CollisionShape{FCollisionShape::MakeSphere((Settings->ThirdPerson.TraceRadius + 1.0f) * MeshScale)};
 
 	static TArray<FOverlapResult> Overlaps;
 	check(Overlaps.IsEmpty())
@@ -473,6 +492,6 @@ bool UAlsCameraComponent::TryFindBlockingGeometryAdjustedLocation(FVector& Locat
 	static const FName FreeSpaceTraceTag{FString::Format(TEXT("{0} (Free Space Overlap)"), {ANSI_TO_TCHAR(__FUNCTION__)})};
 
 	return !GetWorld()->OverlapBlockingTestByChannel(Location, FQuat::Identity, TraceChanel,
-	                                                 FCollisionShape::MakeSphere(Settings->ThirdPerson.TraceRadius * CapsuleScale),
+	                                                 FCollisionShape::MakeSphere(Settings->ThirdPerson.TraceRadius * MeshScale),
 	                                                 {FreeSpaceTraceTag, false, GetOwner()});
 }

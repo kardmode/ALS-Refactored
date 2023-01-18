@@ -9,13 +9,13 @@ struct ALS_API FAlsSpringFloatState
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
 	float Velocity{ForceInit};
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
 	float PreviousTarget{ForceInit};
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
 	bool bStateValid{false};
 
 	void Reset();
@@ -33,13 +33,13 @@ struct ALS_API FAlsSpringVectorState
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
 	FVector Velocity{ForceInit};
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
 	FVector PreviousTarget{ForceInit};
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
 	bool bStateValid{false};
 
 	void Reset();
@@ -58,7 +58,6 @@ class ALS_API UAlsMath : public UBlueprintFunctionLibrary
 	GENERATED_BODY()
 
 public:
-	static constexpr auto TwoPi{6.2831853071795864769252867665590057683943387987502116419498891846f};
 	static constexpr auto CounterClockwiseRotationAngleThreshold{5.0f};
 
 public:
@@ -118,7 +117,7 @@ public:
 
 	static FVector3f ClampMagnitude01(const FVector3f& Vector);
 
-	UFUNCTION(BlueprintPure, Category = "ALS|Als Math|Vector", Meta = (AutoCreateRefTerm = "Vector"))
+	UFUNCTION(BlueprintPure, Category = "ALS|Als Math|Vector", DisplayName = "Clamp Magnitude 01 2D", Meta = (AutoCreateRefTerm = "Vector"))
 	static FVector2D ClampMagnitude012D(const FVector2D& Vector);
 
 	UFUNCTION(BlueprintPure, Category = "ALS|Als Math|Vector")

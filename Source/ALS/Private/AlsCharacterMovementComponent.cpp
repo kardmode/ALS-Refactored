@@ -71,12 +71,12 @@ bool FAlsSavedMove::CanCombineWith(const FSavedMovePtr& NewMovePtr, ACharacter* 
 }
 
 void FAlsSavedMove::CombineWith(const FSavedMove_Character* PreviousMove, ACharacter* Character,
-                                APlayerController* PlayerController, const FVector& PreviousStartLocation)
+                                APlayerController* Player, const FVector& PreviousStartLocation)
 {
 	const auto* Movement{Character->GetCharacterMovement()};
 	const auto InitialRotation{Movement->UpdatedComponent->GetComponentRotation()};
 
-	Super::CombineWith(PreviousMove, Character, PlayerController, PreviousStartLocation);
+	Super::CombineWith(PreviousMove, Character, Player, PreviousStartLocation);
 
 	// Restore initial rotation after movement combining. Without this, any rotation applied in
 	// the character class will be discarded and the character will not be able to rotate properly.
@@ -99,7 +99,7 @@ void FAlsSavedMove::PrepMoveFor(ACharacter* Character)
 	}
 }
 
-FAlsNetworkPredictionData::FAlsNetworkPredictionData(const UCharacterMovementComponent& Movement) : Super(Movement) {}
+FAlsNetworkPredictionData::FAlsNetworkPredictionData(const UCharacterMovementComponent& Movement) : Super{Movement} {}
 
 FSavedMovePtr FAlsNetworkPredictionData::AllocateNewMove()
 {
@@ -154,10 +154,10 @@ UAlsCharacterMovementComponent::UAlsCharacterMovementComponent()
 bool UAlsCharacterMovementComponent::CanEditChange(const FProperty* Property) const
 {
 	return Super::CanEditChange(Property) &&
-	       !(Property->GetFName() == GET_MEMBER_NAME_CHECKED(ThisClass, bIgnoreBaseRotation) ||
-	         Property->GetFName() == GET_MEMBER_NAME_CHECKED(ThisClass, RotationRate) ||
-	         Property->GetFName() == GET_MEMBER_NAME_CHECKED(ThisClass, bUseControllerDesiredRotation) ||
-	         Property->GetFName() == GET_MEMBER_NAME_CHECKED(ThisClass, bOrientRotationToMovement));
+	       Property->GetFName() != GET_MEMBER_NAME_CHECKED(ThisClass, bIgnoreBaseRotation) &&
+	       Property->GetFName() != GET_MEMBER_NAME_CHECKED(ThisClass, RotationRate) &&
+	       Property->GetFName() != GET_MEMBER_NAME_CHECKED(ThisClass, bUseControllerDesiredRotation) &&
+	       Property->GetFName() != GET_MEMBER_NAME_CHECKED(ThisClass, bOrientRotationToMovement);
 }
 #endif
 
@@ -537,7 +537,7 @@ FNetworkPredictionData_Client* UAlsCharacterMovementComponent::GetPredictionData
 {
 	if (ClientPredictionData == nullptr)
 	{
-		auto* MutableThis{const_cast<UAlsCharacterMovementComponent*>(this)};
+		auto* MutableThis{const_cast<ThisClass*>(this)};
 
 		MutableThis->ClientPredictionData = new FAlsNetworkPredictionData{*this};
 	}
@@ -666,7 +666,7 @@ void UAlsCharacterMovementComponent::ComputeFloorDist(const FVector& CapsuleLoca
 		FHitResult Hit(1.f);
 		bBlockingHit = FloorSweepTest(Hit, CapsuleLocation, CapsuleLocation + FVector(0.f,0.f,-TraceDist), CollisionChannel, CapsuleShape, QueryParams, ResponseParam);
 
-		const_cast<UAlsCharacterMovementComponent*>(this)->SavePenetrationAdjustment(Hit);
+		const_cast<ThisClass*>(this)->SavePenetrationAdjustment(Hit);
 
 		if (bBlockingHit)
 		{

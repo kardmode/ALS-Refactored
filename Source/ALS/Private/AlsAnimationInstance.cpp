@@ -46,7 +46,7 @@ void UAlsAnimationInstance::NativeBeginPlay()
 		// Teleportation of simulated proxies is done in a different way.
 
 		Character->GetCapsuleComponent()->TransformUpdated.AddWeakLambda(
-			this, [&bTeleported = bTeleported](USceneComponent*, const EUpdateTransformFlags, const ETeleportType TeleportType)
+			this, [this](USceneComponent*, const EUpdateTransformFlags, const ETeleportType TeleportType)
 			{
 				bTeleported |= TeleportType != ETeleportType::None;
 			});
@@ -67,9 +67,11 @@ void UAlsAnimationInstance::NativeUpdateAnimation(const float DeltaTime)
 
 	if (GetSkelMeshComponent()->IsUsingAbsoluteRotation())
 	{
+		const auto& ActorTransform{Character->GetActorTransform()};
+
 		// Manually synchronize mesh rotation with character rotation.
 
-		GetSkelMeshComponent()->SetWorldRotation(Character->GetActorQuat() * Character->GetBaseRotationOffset());
+		GetSkelMeshComponent()->SetWorldRotation(ActorTransform.GetRotation() * Character->GetBaseRotationOffset());
 
 		// Re-cache transforms because the skeletal mesh transform has changed before.
 
@@ -77,7 +79,7 @@ void UAlsAnimationInstance::NativeUpdateAnimation(const float DeltaTime)
 
 		const_cast<FTransform&>(Proxy.GetComponentTransform()) = GetSkelMeshComponent()->GetComponentTransform();
 		const_cast<FTransform&>(Proxy.GetComponentRelativeTransform()) = GetSkelMeshComponent()->GetRelativeTransform();
-		const_cast<FTransform&>(Proxy.GetActorTransform()) = Character->GetActorTransform();
+		const_cast<FTransform&>(Proxy.GetActorTransform()) = ActorTransform;
 	}
 
 	bTeleported |= Character->IsSimulatedProxyTeleported();
@@ -322,8 +324,10 @@ void UAlsAnimationInstance::RefreshLookTowardsInput(const float DeltaTime)
 		return;
 	}
 
+	// Block look towards the input direction when the character is in the air to prevent head rotation "snap" when changing look sides.
+
 	const auto TargetYawAngle{
-		FRotator3f::NormalizeAxis((LocomotionState.bHasInput
+		FRotator3f::NormalizeAxis((LocomotionState.bHasInput && LocomotionMode != AlsLocomotionModeTags::InAir
 			                           ? LocomotionState.InputYawAngle
 			                           : LocomotionState.TargetYawAngle) - CharacterYawAngle)
 	};
@@ -974,7 +978,8 @@ void UAlsAnimationInstance::ProcessFootLockTeleport(FAlsFootState& FootState) co
 
 void UAlsAnimationInstance::ProcessFootLockBaseChange(FAlsFootState& FootState, const FTransform& ComponentTransformInverse) const
 {
-	if (!bPendingUpdate && !LocomotionState.BasedMovement.bBaseChanged ||
+	// ReSharper disable once CppRedundantParentheses
+	if ((!bPendingUpdate && !LocomotionState.BasedMovement.bBaseChanged) ||
 	    !FAnimWeight::IsRelevant(FootState.IkAmount * FootState.LockAmount))
 	{
 		return;
@@ -1146,13 +1151,18 @@ void UAlsAnimationInstance::RefreshFootOffset(FAlsFootState& FootState, const fl
 
 	// Trace downward from the foot location to find the geometry. If the surface is walkable, save the impact location and normal.
 
-	auto FootLocation{FinalLocation};
-	FootLocation.Z = GetProxyOnAnyThread<FAnimInstanceProxy>().GetComponentTransform().GetLocation().Z;
+	const FVector TraceLocation{
+		FinalLocation.X, FinalLocation.Y, GetProxyOnAnyThread<FAnimInstanceProxy>().GetComponentTransform().GetLocation().Z
+	};
 
 	FHitResult Hit;
 	GetWorld()->LineTraceSingleByChannel(Hit,
-	                                     FootLocation + FVector{0.0f, 0.0f, Settings->Feet.IkTraceDistanceUpward * LocomotionState.Scale},
-	                                     FootLocation - FVector{0.0f, 0.0f, Settings->Feet.IkTraceDistanceDownward * LocomotionState.Scale},
+	                                     TraceLocation + FVector{
+		                                     0.0f, 0.0f, Settings->Feet.IkTraceDistanceUpward * LocomotionState.Scale
+	                                     },
+	                                     TraceLocation - FVector{
+		                                     0.0f, 0.0f, Settings->Feet.IkTraceDistanceDownward * LocomotionState.Scale
+	                                     },
 	                                     UEngineTypes::ConvertToCollisionChannel(Settings->Feet.IkTraceChannel),
 	                                     {ANSI_TO_TCHAR(__FUNCTION__), true, Character});
 
@@ -1185,7 +1195,7 @@ void UAlsAnimationInstance::RefreshFootOffset(FAlsFootState& FootState, const fl
 		// Find the difference in location between the impact location and the expected (flat) floor location. These
 		// values are offset by the impact normal multiplied by the foot height to get better behavior on angled surfaces.
 
-		FootState.OffsetTargetLocation = Hit.ImpactPoint - FootLocation + Hit.ImpactNormal * FootHeight;
+		FootState.OffsetTargetLocation = Hit.ImpactPoint - TraceLocation + Hit.ImpactNormal * FootHeight;
 		FootState.OffsetTargetLocation.Z -= FootHeight;
 
 		// Calculate the rotation offset.

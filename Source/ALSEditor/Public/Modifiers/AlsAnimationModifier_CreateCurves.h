@@ -9,10 +9,10 @@ struct ALSEDITOR_API FAlsAnimationCurveKey
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Meta = (ClampMin = 0))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS", Meta = (ClampMin = 0))
 	int32 Frame{0};
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
 	float Value{0.0f};
 };
 
@@ -21,13 +21,13 @@ struct ALSEDITOR_API FAlsAnimationCurve
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
 	FName Name;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
 	bool bAddKeyOnEachFrame{false};
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
 	TArray<FAlsAnimationCurveKey> Keys
 	{
 		{0, 0.0f}
@@ -39,11 +39,11 @@ class ALSEDITOR_API UAlsAnimationModifier_CreateCurves : public UAnimationModifi
 {
 	GENERATED_BODY()
 
-private:
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Settings", Meta = (AllowPrivateAccess))
+protected:
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Settings")
 	bool bOverrideExistingCurves;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Settings", Meta = (AllowPrivateAccess))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Settings")
 	TArray<FAlsAnimationCurve> Curves
 	{
 		{UAlsConstants::PoseGaitCurve()},

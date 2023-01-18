@@ -5,6 +5,7 @@
 #include "EnhancedInputSubsystems.h"
 #include "Engine/LocalPlayer.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/WorldSettings.h"
 
 AAlsCharacterExample::AAlsCharacterExample()
 {
@@ -18,10 +19,10 @@ void AAlsCharacterExample::NotifyControllerChanged()
 	const auto* PreviousPlayer{Cast<APlayerController>(PreviousController)};
 	if (IsValid(PreviousPlayer))
 	{
-		auto* EnhancedInputSubsystem{ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PreviousPlayer->GetLocalPlayer())};
-		if (IsValid(EnhancedInputSubsystem))
+		auto* InputSubsystem{ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PreviousPlayer->GetLocalPlayer())};
+		if (IsValid(InputSubsystem))
 		{
-			EnhancedInputSubsystem->RemoveMappingContext(InputMappingContext);
+			InputSubsystem->RemoveMappingContext(InputMappingContext);
 		}
 	}
 
@@ -32,10 +33,10 @@ void AAlsCharacterExample::NotifyControllerChanged()
 		NewPlayer->InputPitchScale_DEPRECATED = 1.0f;
 		NewPlayer->InputRollScale_DEPRECATED = 1.0f;
 
-		auto* EnhancedInputSubsystem{ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(NewPlayer->GetLocalPlayer())};
-		if (IsValid(EnhancedInputSubsystem))
+		auto* InputSubsystem{ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(NewPlayer->GetLocalPlayer())};
+		if (IsValid(InputSubsystem))
 		{
-			EnhancedInputSubsystem->AddMappingContext(InputMappingContext, 0);
+			InputSubsystem->AddMappingContext(InputMappingContext, 0);
 		}
 	}
 
@@ -88,8 +89,11 @@ void AAlsCharacterExample::InputLook(const FInputActionValue& ActionValue)
 {
 	const auto Value{ActionValue.Get<FVector2D>()};
 
-	AddControllerPitchInput(Value.Y * LookUpRate * GetWorld()->GetDeltaSeconds());
-	AddControllerYawInput(Value.X * LookRightRate * GetWorld()->GetDeltaSeconds());
+	const auto TimeDilation{GetWorldSettings()->GetEffectiveTimeDilation()};
+	const auto DeltaTime{TimeDilation > SMALL_NUMBER ? GetWorld()->GetDeltaSeconds() / TimeDilation : GetWorld()->DeltaRealTimeSeconds};
+
+	AddControllerPitchInput(Value.Y * LookUpRate * DeltaTime);
+	AddControllerYawInput(Value.X * LookRightRate * DeltaTime);
 }
 
 void AAlsCharacterExample::InputMove(const FInputActionValue& ActionValue)

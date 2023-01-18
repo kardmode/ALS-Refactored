@@ -55,7 +55,7 @@ public:
 	virtual bool CanCombineWith(const FSavedMovePtr& NewMovePtr, ACharacter* Character, float MaxDelta) const override;
 
 	virtual void CombineWith(const FSavedMove_Character* PreviousMove, ACharacter* Character,
-	                         APlayerController* PlayerController, const FVector& PreviousStartLocation) override;
+	                         APlayerController* Player, const FVector& PreviousStartLocation) override;
 
 	virtual void PrepMoveFor(ACharacter* Character) override;
 };
@@ -66,7 +66,7 @@ private:
 	using Super = FNetworkPredictionData_Client_Character;
 
 public:
-	FAlsNetworkPredictionData(const UCharacterMovementComponent& Movement);
+	explicit FAlsNetworkPredictionData(const UCharacterMovementComponent& Movement);
 
 	virtual FSavedMovePtr AllocateNewMove() override;
 };
@@ -78,32 +78,32 @@ class ALS_API UAlsCharacterMovementComponent : public UCharacterMovementComponen
 
 	friend FAlsSavedMove;
 
-private:
+protected:
 	FAlsCharacterNetworkMoveDataContainer MoveDataContainer;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient, Meta = (AllowPrivateAccess))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient)
 	TObjectPtr<UAlsMovementSettings> MovementSettings;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient, Meta = (AllowPrivateAccess))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient)
 	FAlsMovementGaitSettings GaitSettings;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient, Meta = (AllowPrivateAccess))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient)
 	FGameplayTag RotationMode{AlsRotationModeTags::LookingDirection};
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient, Meta = (AllowPrivateAccess))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient)
 	FGameplayTag Stance{AlsStanceTags::Standing};
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient, Meta = (AllowPrivateAccess))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient)
 	FGameplayTag MaxAllowedGait{AlsGaitTags::Walking};
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient, Meta = (AllowPrivateAccess))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient)
 	bool bMovementModeLocked;
 
 	// Valid only on locally controlled characters.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient, Meta = (AllowPrivateAccess))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient)
 	FRotator PreviousControlRotation;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient, Meta = (AllowPrivateAccess))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient)
 	FVector PendingPenetrationAdjustment;
 
 public:
@@ -122,7 +122,6 @@ public:
 
 	virtual void OnMovementModeChanged(EMovementMode PreviousMovementMode, uint8 PreviousCustomMode) override;
 
-public:
 	virtual float GetMaxAcceleration() const override;
 
 	virtual float GetMaxBrakingDeceleration() const override;
