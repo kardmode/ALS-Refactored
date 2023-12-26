@@ -33,28 +33,8 @@ public:
 	TObjectPtr<UCurveFloat> RotationInterpolationSpeedCurve{nullptr};
 
 public:
-	float GetSpeedForGait(const FGameplayTag& GaitTag) const;
+	float GetSpeedByGait(const FGameplayTag& Gait) const;
 };
-
-inline float FAlsMovementGaitSettings::GetSpeedForGait(const FGameplayTag& GaitTag) const
-{
-	if (GaitTag == AlsGaitTags::Walking)
-	{
-		return WalkSpeed;
-	}
-
-	if (GaitTag == AlsGaitTags::Running)
-	{
-		return RunSpeed;
-	}
-
-	if (GaitTag == AlsGaitTags::Sprinting)
-	{
-		return SprintSpeed;
-	}
-
-	return 0.0f;
-}
 
 USTRUCT(BlueprintType)
 struct ALS_API FAlsMovementStanceSettings
@@ -79,7 +59,27 @@ public:
 	TMap<FGameplayTag, FAlsMovementStanceSettings> RotationModes
 	{
 		{AlsRotationModeTags::VelocityDirection, {}},
-		{AlsRotationModeTags::LookingDirection, {}},
+		{AlsRotationModeTags::ViewDirection, {}},
 		{AlsRotationModeTags::Aiming, {}}
 	};
 };
+
+inline float FAlsMovementGaitSettings::GetSpeedByGait(const FGameplayTag& Gait) const
+{
+	if (Gait == AlsGaitTags::Walking)
+	{
+		return WalkSpeed;
+	}
+
+	if (Gait == AlsGaitTags::Running)
+	{
+		return RunSpeed;
+	}
+
+	if (Gait == AlsGaitTags::Sprinting)
+	{
+		return SprintSpeed;
+	}
+
+	return 0.0f;
+}

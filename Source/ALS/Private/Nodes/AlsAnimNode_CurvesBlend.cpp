@@ -1,11 +1,13 @@
 #include "Nodes/AlsAnimNode_CurvesBlend.h"
 
-#include "Animation/AnimInstanceProxy.h"
+#include "Animation/AnimTrace.h"
 #include "Utility/AlsEnumUtility.h"
+
+#include UE_INLINE_GENERATED_CPP_BY_NAME(AlsAnimNode_CurvesBlend)
 
 void FAlsAnimNode_CurvesBlend::Initialize_AnyThread(const FAnimationInitializeContext& Context)
 {
-	DECLARE_SCOPE_HIERARCHICAL_COUNTER_ANIMNODE(Initialize_AnyThread)
+	DECLARE_SCOPE_HIERARCHICAL_COUNTER_FUNC()
 
 	Super::Initialize_AnyThread(Context);
 
@@ -15,7 +17,7 @@ void FAlsAnimNode_CurvesBlend::Initialize_AnyThread(const FAnimationInitializeCo
 
 void FAlsAnimNode_CurvesBlend::CacheBones_AnyThread(const FAnimationCacheBonesContext& Context)
 {
-	DECLARE_SCOPE_HIERARCHICAL_COUNTER_ANIMNODE(CacheBones_AnyThread)
+	DECLARE_SCOPE_HIERARCHICAL_COUNTER_FUNC()
 
 	Super::CacheBones_AnyThread(Context);
 
@@ -25,7 +27,7 @@ void FAlsAnimNode_CurvesBlend::CacheBones_AnyThread(const FAnimationCacheBonesCo
 
 void FAlsAnimNode_CurvesBlend::Update_AnyThread(const FAnimationUpdateContext& Context)
 {
-	DECLARE_SCOPE_HIERARCHICAL_COUNTER_ANIMNODE(Update_AnyThread)
+	DECLARE_SCOPE_HIERARCHICAL_COUNTER_FUNC()
 
 	Super::Update_AnyThread(Context);
 
@@ -45,7 +47,8 @@ void FAlsAnimNode_CurvesBlend::Update_AnyThread(const FAnimationUpdateContext& C
 
 void FAlsAnimNode_CurvesBlend::Evaluate_AnyThread(FPoseContext& Output)
 {
-	DECLARE_SCOPE_HIERARCHICAL_COUNTER_ANIMNODE(Evaluate_AnyThread)
+	DECLARE_SCOPE_HIERARCHICAL_COUNTER_FUNC()
+	ANIM_MT_SCOPE_CYCLE_COUNTER_VERBOSE(CurvesBlend, !IsInGameThread());
 
 	Super::Evaluate_AnyThread(Output);
 
@@ -92,7 +95,12 @@ void FAlsAnimNode_CurvesBlend::GatherDebugData(FNodeDebugData& DebugData)
 {
 	DECLARE_SCOPE_HIERARCHICAL_COUNTER_ANIMNODE(GatherDebugData)
 
-	DebugData.AddDebugItem(FString::Printf(TEXT("%s: Blend Amount: %.2f."), *DebugData.GetNodeName(this), GetBlendAmount()));
+	TStringBuilder<256> DebugItemBuilder;
+
+	DebugItemBuilder << DebugData.GetNodeName(this) << TEXTVIEW(": Blend Amount: ");
+	DebugItemBuilder.Appendf(TEXT("%.2f"), GetBlendAmount());
+
+	DebugData.AddDebugItem(FString{DebugItemBuilder});
 	SourcePose.GatherDebugData(DebugData.BranchFlow(1.0f));
 	CurvesPose.GatherDebugData(DebugData.BranchFlow(GetBlendAmount()));
 }

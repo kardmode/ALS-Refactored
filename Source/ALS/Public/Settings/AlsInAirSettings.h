@@ -10,6 +10,7 @@ struct ALS_API FAlsInAirSettings
 {
 	GENERATED_BODY()
 
+public:
 	// Vertical velocity to lean amount curve.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
 	TObjectPtr<UCurveFloat> LeanAmountCurve{nullptr};
@@ -19,5 +20,16 @@ struct ALS_API FAlsInAirSettings
 	TObjectPtr<UCurveFloat> GroundPredictionAmountCurve{nullptr};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
-	TArray<TEnumAsByte<EObjectTypeQuery>> GroundPredictionSweepObjectTypes;
+	TEnumAsByte<ECollisionChannel> GroundPredictionSweepChannel{ECC_Visibility};
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
+	TArray<TEnumAsByte<ECollisionChannel>> GroundPredictionResponseChannels;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "ALS", AdvancedDisplay)
+	FCollisionResponseContainer GroundPredictionSweepResponses{ECR_Ignore};
+
+public:
+#if WITH_EDITOR
+	void PostEditChangeProperty(const FPropertyChangedEvent& PropertyChangedEvent);
+#endif
 };

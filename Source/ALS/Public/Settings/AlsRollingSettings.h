@@ -1,7 +1,8 @@
 ﻿#pragma once
 
-#include "Animation/AnimMontage.h"
 #include "AlsRollingSettings.generated.h"
+
+class UAnimMontage;
 
 USTRUCT(BlueprintType)
 struct ALS_API FAlsRollingSettings
@@ -12,22 +13,22 @@ struct ALS_API FAlsRollingSettings
 	TObjectPtr<UAnimMontage> Montage{nullptr};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
-	bool bCrouchOnStart{true};
+	uint8 bCrouchOnStart : 1 {true};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
-	bool bRotateToInputOnStart{true};
+	uint8 bRotateToInputOnStart : 1 {true};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS", Meta = (ClampMin = 0))
 	float RotationInterpolationSpeed{10.0f};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
-	bool bStartRollingOnLand{true};
+	uint8 bStartRollingOnLand : 1 {true};
 
-	// If a character landed with a speed greater than the specified value, then start rolling.
+	// Rolling will start if the character lands with a speed greater than the specified value.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS",
 		Meta = (ClampMin = 0, EditCondition = "bStartRollingOnLand", ForceUnits = "cm/s"))
 	float RollingOnLandSpeedThreshold{700.0f};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
-	bool bInterruptRollingWhenInAir{true};
+	uint8 bInterruptRollingWhenInAir : 1 {true};
 };

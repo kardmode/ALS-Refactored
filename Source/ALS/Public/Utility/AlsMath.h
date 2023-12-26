@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Kismet/BlueprintFunctionLibrary.h"
-#include "State/AlsMovementDirection.h"
 #include "AlsMath.generated.h"
 
 USTRUCT(BlueprintType)
@@ -16,17 +15,10 @@ struct ALS_API FAlsSpringFloatState
 	float PreviousTarget{ForceInit};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
-	bool bStateValid{false};
+	uint8 bStateValid : 1 {false};
 
 	void Reset();
 };
-
-inline void FAlsSpringFloatState::Reset()
-{
-	Velocity = 0.f;
-	PreviousTarget = 0.f;
-	bStateValid = false;
-}
 
 USTRUCT(BlueprintType)
 struct ALS_API FAlsSpringVectorState
@@ -40,17 +32,10 @@ struct ALS_API FAlsSpringVectorState
 	FVector PreviousTarget{ForceInit};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
-	bool bStateValid{false};
+	uint8 bStateValid : 1 {false};
 
 	void Reset();
 };
-
-inline void FAlsSpringVectorState::Reset()
-{
-	Velocity = FVector::ZeroVector;
-	PreviousTarget = FVector::ZeroVector;
-	bStateValid = false;
-}
 
 UCLASS()
 class ALS_API UAlsMath : public UBlueprintFunctionLibrary
@@ -61,100 +46,137 @@ public:
 	static constexpr auto CounterClockwiseRotationAngleThreshold{5.0f};
 
 public:
-	UFUNCTION(BlueprintPure, Category = "ALS|Als Math")
+	UFUNCTION(BlueprintPure, Category = "ALS|Math", Meta = (ReturnDisplayName = "Value"))
 	static float Clamp01(float Value);
 
-	UFUNCTION(BlueprintPure, Category = "ALS|Als Math")
-	static float LerpClamped(float A, float B, float Alpha);
+	UFUNCTION(BlueprintPure, Category = "ALS|Math", Meta = (ReturnDisplayName = "Value"))
+	static float LerpClamped(float From, float To, float Alpha);
 
-	UFUNCTION(BlueprintPure, Category = "ALS|Als Math")
-	static float LerpAngle(float A, float B, float Alpha);
+	UFUNCTION(BlueprintPure, Category = "ALS|Math", Meta = (ReturnDisplayName = "Angle"))
+	static float LerpAngle(float From, float To, float Alpha);
 
-	UFUNCTION(BlueprintPure, Category = "ALS|Als Math", Meta = (AutoCreateRefTerm = "A, B"))
-	static FRotator LerpRotator(const FRotator& A, const FRotator& B, float Alpha);
+	UFUNCTION(BlueprintPure, Category = "ALS|Math", Meta = (AutoCreateRefTerm = "From, To", ReturnDisplayName = "Rotator"))
+	static FRotator LerpRotator(const FRotator& From, const FRotator& To, float Alpha);
 
-	UFUNCTION(BlueprintPure, Category = "ALS|Als Math")
+	UFUNCTION(BlueprintPure, Category = "ALS|Math", Meta = (ReturnDisplayName = "Interpolation Ammount"))
 	static float Damp(float DeltaTime, float Smoothing);
 
-	UFUNCTION(BlueprintPure, Category = "ALS|Als Math")
+	UFUNCTION(BlueprintPure, Category = "ALS|Math", Meta = (ReturnDisplayName = "Interpolation Ammount"))
 	static float ExponentialDecay(float DeltaTime, float Lambda);
 
-	template <class ValueType>
+	template <typename ValueType>
 	static ValueType Damp(const ValueType& Current, const ValueType& Target, float DeltaTime, float Smoothing);
 
-	template <class ValueType>
+	template <typename ValueType>
 	static ValueType ExponentialDecay(const ValueType& Current, const ValueType& Target, float DeltaTime, float Lambda);
 
-	UFUNCTION(BlueprintPure, Category = "ALS|Als Math")
+	UFUNCTION(BlueprintPure, Category = "ALS|Math", Meta = (ReturnDisplayName = "Angle"))
 	static float DampAngle(float Current, float Target, float DeltaTime, float Smoothing);
 
-	UFUNCTION(BlueprintPure, Category = "ALS|Als Math")
+	UFUNCTION(BlueprintPure, Category = "ALS|Math", Meta = (ReturnDisplayName = "Angle"))
 	static float ExponentialDecayAngle(float Current, float Target, float DeltaTime, float Lambda);
 
-	UFUNCTION(BlueprintPure, Category = "ALS|Als Math", Meta = (AutoCreateRefTerm = "Current, Target"))
+	UFUNCTION(BlueprintPure, Category = "ALS|Math", Meta = (AutoCreateRefTerm = "Current, Target", ReturnDisplayName = "Rotator"))
 	static FRotator DampRotator(const FRotator& Current, const FRotator& Target, float DeltaTime, float Smoothing);
 
-	UFUNCTION(BlueprintPure, Category = "ALS|Als Math", Meta = (AutoCreateRefTerm = "Current, Target"))
+	UFUNCTION(BlueprintPure, Category = "ALS|Math", Meta = (AutoCreateRefTerm = "Current, Target", ReturnDisplayName = "Rotator"))
 	static FRotator ExponentialDecayRotator(const FRotator& Current, const FRotator& Target, float DeltaTime, float Lambda);
 
-	UFUNCTION(BlueprintPure, Category = "ALS|Als Math")
+	UFUNCTION(BlueprintPure, Category = "ALS|Math", Meta = (ReturnDisplayName = "Angle"))
 	static float InterpolateAngleConstant(float Current, float Target, float DeltaTime, float InterpolationSpeed);
 
-	template <class ValueType, class StateType>
+	template <typename ValueType, typename StateType>
 	static ValueType SpringDamp(const ValueType& Current, const ValueType& Target, StateType& SpringState,
 	                            float DeltaTime, float Frequency, float DampingRatio, float TargetVelocityAmount = 1.0f);
 
-	UFUNCTION(BlueprintCallable, Category = "ALS|Als Math")
+	UFUNCTION(BlueprintCallable, Category = "ALS|Math", Meta = (ReturnDisplayName = "Value"))
 	static float SpringDampFloat(float Current, float Target, UPARAM(ref) FAlsSpringFloatState& SpringState,
 	                             float DeltaTime, float Frequency, float DampingRatio, float TargetVelocityAmount = 1.0f);
 
-	UFUNCTION(BlueprintCallable, Category = "ALS|Als Math", Meta = (AutoCreateRefTerm = "Current, Target"))
+	UFUNCTION(BlueprintCallable, Category = "ALS|Math", Meta = (AutoCreateRefTerm = "Current, Target", ReturnDisplayName = "Vector"))
 	static FVector SpringDampVector(const FVector& Current, const FVector& Target, UPARAM(ref) FAlsSpringVectorState& SpringState,
 	                                float DeltaTime, float Frequency, float DampingRatio, float TargetVelocityAmount = 1.0f);
 
-	UFUNCTION(BlueprintPure, Category = "ALS|Als Math|Vector", Meta = (AutoCreateRefTerm = "Vector"))
+	// Remaps the angle from the [175, 180] range to [-185, -180]. Used to
+	// make the character rotate counterclockwise during a 180 degree turn.
+	template <typename ValueType>
+	static constexpr float RemapAngleForCounterClockwiseRotation(ValueType Angle);
+
+	UFUNCTION(BlueprintPure, Category = "ALS|Math|Vector", Meta = (AutoCreateRefTerm = "Vector", ReturnDisplayName = "Vector"))
 	static FVector ClampMagnitude01(const FVector& Vector);
 
 	static FVector3f ClampMagnitude01(const FVector3f& Vector);
 
-	UFUNCTION(BlueprintPure, Category = "ALS|Als Math|Vector", DisplayName = "Clamp Magnitude 01 2D", Meta = (AutoCreateRefTerm = "Vector"))
+	UFUNCTION(BlueprintPure, Category = "ALS|Math|Vector", DisplayName = "Clamp Magnitude 01 2D",
+		Meta = (AutoCreateRefTerm = "Vector", ReturnDisplayName = "Vector"))
 	static FVector2D ClampMagnitude012D(const FVector2D& Vector);
 
-	UFUNCTION(BlueprintPure, Category = "ALS|Als Math|Vector")
+	UFUNCTION(BlueprintPure, Category = "ALS|Math|Vector", Meta = (ReturnDisplayName = "Direction"))
 	static FVector2D RadianToDirection(float Radian);
 
-	UFUNCTION(BlueprintPure, Category = "ALS|Als Math|Vector")
+	UFUNCTION(BlueprintPure, Category = "ALS|Math|Vector", Meta = (ReturnDisplayName = "Direction"))
 	static FVector RadianToDirectionXY(float Radian);
 
-	UFUNCTION(BlueprintPure, Category = "ALS|Als Math|Vector")
+	UFUNCTION(BlueprintPure, Category = "ALS|Math|Vector", Meta = (ReturnDisplayName = "Direction"))
 	static FVector2D AngleToDirection(float Angle);
 
-	UFUNCTION(BlueprintPure, Category = "ALS|Als Math|Vector")
+	UFUNCTION(BlueprintPure, Category = "ALS|Math|Vector", Meta = (ReturnDisplayName = "Direction"))
 	static FVector AngleToDirectionXY(float Angle);
 
-	UFUNCTION(BlueprintPure, Category = "ALS|Als Math|Vector", Meta = (AutoCreateRefTerm = "Direction"))
+	UFUNCTION(BlueprintPure, Category = "ALS|Math|Vector", Meta = (AutoCreateRefTerm = "Direction", ReturnDisplayName = "Angle"))
 	static double DirectionToAngle(const FVector2D& Direction);
 
-	UFUNCTION(BlueprintPure, Category = "ALS|Als Math|Vector", Meta = (AutoCreateRefTerm = "Direction"))
+	UFUNCTION(BlueprintPure, Category = "ALS|Math|Vector", Meta = (AutoCreateRefTerm = "Direction", ReturnDisplayName = "Angle"))
 	static double DirectionToAngleXY(const FVector& Direction);
 
-	UFUNCTION(BlueprintPure, Category = "ALS|Als Math|Vector", Meta = (AutoCreateRefTerm = "Vector"))
+	UFUNCTION(BlueprintPure, Category = "ALS|Math|Vector", Meta = (AutoCreateRefTerm = "Vector", ReturnDisplayName = "Vector"))
 	static FVector PerpendicularClockwiseXY(const FVector& Vector);
 
-	UFUNCTION(BlueprintPure, Category = "ALS|Als Math|Vector", Meta = (AutoCreateRefTerm = "Vector"))
+	UFUNCTION(BlueprintPure, Category = "ALS|Math|Vector", Meta = (AutoCreateRefTerm = "Vector", ReturnDisplayName = "Vector"))
 	static FVector PerpendicularCounterClockwiseXY(const FVector& Vector);
 
-	UFUNCTION(BlueprintPure, Category = "ALS|Als Math|Vector",
-		DisplayName = "Angle Between (Skip Normalization)", Meta = (AutoCreateRefTerm = "From, To"))
+	UFUNCTION(BlueprintPure, Category = "ALS|Math|Vector", DisplayName = "Angle Between (Skip Normalization)",
+		Meta = (AutoCreateRefTerm = "From, To", ReturnDisplayName = "Angle"))
 	static double AngleBetweenSkipNormalization(const FVector& From, const FVector& To);
 
-	UFUNCTION(BlueprintPure, Category = "ALS|Als Math|Vector",
-		DisplayName = "Slerp (Skip Normalization)", Meta = (AutoCreateRefTerm = "From, To"))
+	UFUNCTION(BlueprintPure, Category = "ALS|Math|Vector",
+		DisplayName = "Slerp (Skip Normalization)", Meta = (AutoCreateRefTerm = "From, To", ReturnDisplayName = "Direction"))
 	static FVector SlerpSkipNormalization(const FVector& From, const FVector& To, float Alpha);
 
-	UFUNCTION(BlueprintCallable, Category = "ALS|Als Math|Input")
+	UFUNCTION(BlueprintCallable, Category = "ALS|Math|Input", Meta = (ReturnDisplayName = "Direction"))
 	static EAlsMovementDirection CalculateMovementDirection(float Angle, float ForwardHalfAngle, float AngleThreshold);
+
+	// Calculates the projection location and direction of the perpendicular to AC through B.
+	UFUNCTION(BlueprintCallable, Category = "ALS|Math|Input",
+		Meta = (AutoCreateRefTerm = "ALocation, BLocation, CLocation", ExpandBoolAsExecs = "ReturnValue"))
+	static bool TryCalculatePoleVector(const FVector& ALocation, const FVector& BLocation, const FVector& CLocation,
+	                                   FVector& ProjectionLocation, FVector& Direction);
 };
+
+template <typename ValueType>
+constexpr float UAlsMath::RemapAngleForCounterClockwiseRotation(const ValueType Angle)
+{
+	if (Angle > 180.0f - CounterClockwiseRotationAngleThreshold)
+	{
+		return Angle - 360.0f;
+	}
+
+	return Angle;
+}
+
+inline void FAlsSpringFloatState::Reset()
+{
+	Velocity = 0.f;
+	PreviousTarget = 0.f;
+	bStateValid = false;
+}
+
+inline void FAlsSpringVectorState::Reset()
+{
+	Velocity = FVector::ZeroVector;
+	PreviousTarget = FVector::ZeroVector;
+	bStateValid = false;
+}
 
 inline float UAlsMath::Clamp01(const float Value)
 {
@@ -165,45 +187,30 @@ inline float UAlsMath::Clamp01(const float Value)
 		       : Value;
 }
 
-inline float UAlsMath::LerpClamped(const float A, const float B, const float Alpha)
+inline float UAlsMath::LerpClamped(const float From, const float To, const float Alpha)
 {
-	return A + (B - A) * Clamp01(Alpha);
+	return From + (To - From) * Clamp01(Alpha);
 }
 
-inline float UAlsMath::LerpAngle(const float A, const float B, const float Alpha)
+inline float UAlsMath::LerpAngle(const float From, const float To, const float Alpha)
 {
-	auto Delta{FRotator3f::NormalizeAxis(B - A)};
+	auto Delta{FRotator3f::NormalizeAxis(To - From)};
+	Delta = RemapAngleForCounterClockwiseRotation(Delta);
 
-	if (Delta > 180.0f - CounterClockwiseRotationAngleThreshold)
-	{
-		Delta -= 360.0f;
-	}
-
-	return FRotator3f::NormalizeAxis(A + Delta * Alpha);
+	return FRotator3f::NormalizeAxis(From + Delta * Alpha);
 }
 
-inline FRotator UAlsMath::LerpRotator(const FRotator& A, const FRotator& B, const float Alpha)
+inline FRotator UAlsMath::LerpRotator(const FRotator& From, const FRotator& To, const float Alpha)
 {
-	auto Result{B - A};
+	auto Result{To - From};
 	Result.Normalize();
 
-	if (Result.Pitch > 180.0f - CounterClockwiseRotationAngleThreshold)
-	{
-		Result.Pitch -= 360.0f;
-	}
-
-	if (Result.Yaw > 180.0f - CounterClockwiseRotationAngleThreshold)
-	{
-		Result.Yaw -= 360.0f;
-	}
-
-	if (Result.Roll > 180.0f - CounterClockwiseRotationAngleThreshold)
-	{
-		Result.Roll -= 360.0f;
-	}
+	Result.Pitch = RemapAngleForCounterClockwiseRotation(Result.Pitch);
+	Result.Yaw = RemapAngleForCounterClockwiseRotation(Result.Yaw);
+	Result.Roll = RemapAngleForCounterClockwiseRotation(Result.Roll);
 
 	Result *= Alpha;
-	Result += A;
+	Result += From;
 	Result.Normalize();
 
 	return Result;
@@ -223,7 +230,7 @@ inline float UAlsMath::ExponentialDecay(const float DeltaTime, const float Lambd
 	return 1.0f - FMath::InvExpApprox(Lambda * DeltaTime);
 }
 
-template <class ValueType>
+template <typename ValueType>
 ValueType UAlsMath::Damp(const ValueType& Current, const ValueType& Target, const float DeltaTime, const float Smoothing)
 {
 	return Smoothing > 0.0f
@@ -231,7 +238,7 @@ ValueType UAlsMath::Damp(const ValueType& Current, const ValueType& Target, cons
 		       : Target;
 }
 
-template <class ValueType>
+template <typename ValueType>
 ValueType UAlsMath::ExponentialDecay(const ValueType& Current, const ValueType& Target, const float DeltaTime, const float Lambda)
 {
 	return Lambda > 0.0f
@@ -289,15 +296,39 @@ inline float UAlsMath::InterpolateAngleConstant(const float Current, const float
 	}
 
 	auto Delta{FRotator3f::NormalizeAxis(Target - Current)};
-
-	if (Delta > 180.0f - CounterClockwiseRotationAngleThreshold)
-	{
-		Delta -= 360.0f;
-	}
+	Delta = RemapAngleForCounterClockwiseRotation(Delta);
 
 	const auto Alpha{InterpolationSpeed * DeltaTime};
 
 	return FRotator3f::NormalizeAxis(Current + FMath::Clamp(Delta, -Alpha, Alpha));
+}
+
+template <typename ValueType, typename StateType>
+ValueType UAlsMath::SpringDamp(const ValueType& Current, const ValueType& Target, StateType& SpringState, const float DeltaTime,
+                               const float Frequency, const float DampingRatio, const float TargetVelocityAmount)
+{
+	if (DeltaTime <= UE_SMALL_NUMBER)
+	{
+		return Current;
+	}
+
+	if (!SpringState.bStateValid)
+	{
+		SpringState.Velocity = ValueType{0.0f};
+		SpringState.PreviousTarget = Target;
+		SpringState.bStateValid = true;
+
+		return Target;
+	}
+
+	ValueType Result{Current};
+	FMath::SpringDamper(Result, SpringState.Velocity, Target,
+	                    (Target - SpringState.PreviousTarget) * Clamp01(TargetVelocityAmount) / DeltaTime,
+	                    DeltaTime, Frequency, DampingRatio);
+
+	SpringState.PreviousTarget = Target;
+
+	return Result;
 }
 
 inline FVector UAlsMath::ClampMagnitude01(const FVector& Vector)

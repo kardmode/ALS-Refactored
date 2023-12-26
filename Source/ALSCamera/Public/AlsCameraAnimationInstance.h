@@ -1,6 +1,5 @@
 #pragma once
 
-#include "GameplayTagContainer.h"
 #include "Animation/AnimInstance.h"
 #include "Utility/AlsGameplayTags.h"
 #include "AlsCameraAnimationInstance.generated.h"
@@ -27,7 +26,7 @@ protected:
 	FGameplayTag LocomotionMode;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient)
-	FGameplayTag RotationMode{AlsRotationModeTags::LookingDirection};
+	FGameplayTag RotationMode{AlsRotationModeTags::ViewDirection};
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient)
 	FGameplayTag Stance{AlsStanceTags::Standing};
@@ -39,7 +38,7 @@ protected:
 	FGameplayTag LocomotionAction;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient)
-	bool bRightShoulder{true};
+	uint8 bRightShoulder : 1 {true};
 
 public:
 	virtual void NativeInitializeAnimation() override;

@@ -3,18 +3,24 @@
 #include "DrawDebugHelpers.h"
 #include "GameplayTagsManager.h"
 #include "Animation/AnimInstance.h"
+#include "Animation/AnimMontage.h"
+#include "Animation/AnimSequence.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Engine/World.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/HUD.h"
 #include "GameFramework/PlayerState.h"
 #include "Kismet/GameplayStatics.h"
 #include "Utility/AlsMacros.h"
 
-FString UAlsUtility::NameToDisplayString(const FName& Name, const bool bIsBool)
+#include UE_INLINE_GENERATED_CPP_BY_NAME(AlsUtility)
+
+FString UAlsUtility::NameToDisplayString(const FName& Name, const bool bNameIsBool)
 {
-	return FName::NameToDisplayString(Name.ToString(), bIsBool);
+	return FName::NameToDisplayString(Name.ToString(), bNameIsBool);
 }
 
-float UAlsUtility::GetAnimationCurveValue(const ACharacter* Character, const FName& CurveName)
+float UAlsUtility::GetAnimationCurveValueFromCharacter(const ACharacter* Character, const FName& CurveName)
 {
 	const auto* Mesh{IsValid(Character) ? Character->GetMesh() : nullptr};
 	const auto* AnimationInstance{IsValid(Mesh) ? Mesh->GetAnimInstance() : nullptr};
@@ -36,14 +42,88 @@ FName UAlsUtility::GetSimpleTagName(const FGameplayTag& Tag)
 
 float UAlsUtility::GetFirstPlayerPingSeconds(const UObject* WorldContext)
 {
-	const auto* World{WorldContext->GetWorld()};
+	const auto* World{IsValid(WorldContext) ? WorldContext->GetWorld() : nullptr};
 	const auto* PlayerController{IsValid(World) ? World->GetFirstPlayerController() : nullptr};
 	const auto* PlayerState{IsValid(PlayerController) ? PlayerController->PlayerState.Get() : nullptr};
 
-	return IsValid(PlayerState) ? PlayerState->ExactPing * 0.001f : 0.0f;
+	return IsValid(PlayerState) ? PlayerState->GetPingInMilliseconds() * 0.001f : 0.0f;
 }
 
-bool UAlsUtility::ShouldDisplayDebug(const AActor* Actor, const FName& DisplayName)
+bool UAlsUtility::TryGetMovementBaseRotationSpeed(const FBasedMovementInfo& BasedMovement, FRotator& RotationSpeed)
+{
+	if (!MovementBaseUtility::IsDynamicBase(BasedMovement.MovementBase))
+	{
+		RotationSpeed = FRotator::ZeroRotator;
+		return false;
+	}
+
+	const auto* Body{BasedMovement.MovementBase->GetBodyInstance(BasedMovement.BoneName)};
+	if (Body == nullptr)
+	{
+		RotationSpeed = FRotator::ZeroRotator;
+		return false;
+	}
+
+	const auto AngularVelocityVector{Body->GetUnrealWorldAngularVelocityInRadians()};
+	if (AngularVelocityVector.IsNearlyZero())
+	{
+		RotationSpeed = FRotator::ZeroRotator;
+		return false;
+	}
+
+	RotationSpeed.Roll = FMath::RadiansToDegrees(AngularVelocityVector.X);
+	RotationSpeed.Pitch = FMath::RadiansToDegrees(AngularVelocityVector.Y);
+	RotationSpeed.Yaw = FMath::RadiansToDegrees(AngularVelocityVector.Z);
+
+	return true;
+}
+
+FTransform UAlsUtility::ExtractRootTransformFromMontage(const UAnimMontage* Montage, const float Time)
+{
+	// Based on UMotionWarpingUtilities::ExtractRootTransformFromAnimation().
+
+	if (!ALS_ENSURE(IsValid(Montage)) || !ALS_ENSURE(Montage->SlotAnimTracks.Num() > 0))
+	{
+		return FTransform::Identity;
+	}
+
+	const auto* Segment{Montage->SlotAnimTracks[0].AnimTrack.GetSegmentAtTime(Time)};
+	if (!ALS_ENSURE(Segment != nullptr))
+	{
+		return FTransform::Identity;
+	}
+
+	const auto* Sequence{Cast<UAnimSequence>(Segment->GetAnimReference())};
+	if (!ALS_ENSURE(IsValid(Sequence)))
+	{
+		return FTransform::Identity;
+	}
+
+	return Sequence->ExtractRootTrackTransform(Segment->ConvertTrackPosToAnimPos(Time), nullptr);
+}
+
+FTransform UAlsUtility::ExtractLastRootTransformFromMontage(const UAnimMontage* Montage)
+{
+	// Based on UMotionWarpingUtilities::ExtractRootTransformFromAnimation().
+
+	if (!ALS_ENSURE(IsValid(Montage)) || !ALS_ENSURE(Montage->SlotAnimTracks.Num() > 0) ||
+	    !ALS_ENSURE(Montage->SlotAnimTracks[0].AnimTrack.AnimSegments.Num() > 0))
+	{
+		return FTransform::Identity;
+	}
+
+	const auto& Segment{Montage->SlotAnimTracks[0].AnimTrack.AnimSegments.Last()};
+	const auto* Sequence{Cast<UAnimSequence>(Segment.GetAnimReference())};
+
+	if (!ALS_ENSURE(IsValid(Sequence)))
+	{
+		return FTransform::Identity;
+	}
+
+	return Sequence->ExtractRootTrackTransform(Segment.GetEndPos(), nullptr);
+}
+
+bool UAlsUtility::ShouldDisplayDebugForActor(const AActor* Actor, const FName& DisplayName)
 {
 	const auto* World{IsValid(Actor) ? Actor->GetWorld() : nullptr};
 	const auto* PlayerController{IsValid(World) ? World->GetFirstPlayerController() : nullptr};
@@ -52,12 +132,12 @@ bool UAlsUtility::ShouldDisplayDebug(const AActor* Actor, const FName& DisplayNa
 	return IsValid(Hud) && Hud->ShouldDisplayDebug(DisplayName) && Hud->GetCurrentDebugTargetActor() == Actor;
 }
 
-void UAlsUtility::DrawHalfCircle(const UObject* WorldContext, const FVector& Center, const FVector& XAxis,
+void UAlsUtility::DrawHalfCircle(const UObject* WorldContext, const FVector& Location, const FVector& XAxis,
                                  const FVector& YAxis, const float Radius, const FLinearColor& Color,
                                  const float Duration, const float Thickness, const uint8 DepthPriority)
 {
 #if ENABLE_DRAW_DEBUG
-	const auto* World{WorldContext->GetWorld()};
+	const auto* World{IsValid(WorldContext) ? WorldContext->GetWorld() : nullptr};
 	if (!ALS_ENSURE(IsValid(World)))
 	{
 		return;
@@ -66,16 +146,16 @@ void UAlsUtility::DrawHalfCircle(const UObject* WorldContext, const FVector& Cen
 	const auto FColor{Color.ToFColor(true)};
 	const auto bPersistent{Duration < 0.0f};
 
-	auto PreviousVertex{Center + XAxis * Radius};
+	auto PreviousVertex{Location + XAxis * Radius};
 
 	for (auto i{1}; i <= DrawCircleSidesCount / 2; i++)
 	{
-		static constexpr auto DeltaAngle{TWO_PI / DrawCircleSidesCount};
+		static constexpr auto DeltaAngle{UE_TWO_PI / DrawCircleSidesCount};
 
 		float Sin, Cos;
 		FMath::SinCos(&Sin, &Cos, DeltaAngle * i);
 
-		const auto NextVertex{Center + Radius * Cos * XAxis + Radius * Sin * YAxis};
+		const auto NextVertex{Location + Radius * Cos * XAxis + Radius * Sin * YAxis};
 
 		DrawDebugLine(World, PreviousVertex, NextVertex, FColor, bPersistent, Duration, DepthPriority, Thickness);
 
@@ -84,12 +164,12 @@ void UAlsUtility::DrawHalfCircle(const UObject* WorldContext, const FVector& Cen
 #endif
 }
 
-void UAlsUtility::DrawQuarterCircle(const UObject* WorldContext, const FVector& Center, const FVector& XAxis,
+void UAlsUtility::DrawQuarterCircle(const UObject* WorldContext, const FVector& Location, const FVector& XAxis,
                                     const FVector& YAxis, const float Radius, const FLinearColor& Color,
                                     const float Duration, const float Thickness, const uint8 DepthPriority)
 {
 #if ENABLE_DRAW_DEBUG
-	const auto* World{WorldContext->GetWorld()};
+	const auto* World{IsValid(WorldContext) ? WorldContext->GetWorld() : nullptr};
 	if (!ALS_ENSURE(IsValid(World)))
 	{
 		return;
@@ -98,16 +178,16 @@ void UAlsUtility::DrawQuarterCircle(const UObject* WorldContext, const FVector& 
 	const auto FColor{Color.ToFColor(true)};
 	const auto bPersistent{Duration < 0.0f};
 
-	auto PreviousVertex{Center + XAxis * Radius};
+	auto PreviousVertex{Location + XAxis * Radius};
 
 	for (auto i{1}; i <= DrawCircleSidesCount / 4; i++)
 	{
-		static constexpr auto DeltaAngle{TWO_PI / DrawCircleSidesCount};
+		static constexpr auto DeltaAngle{UE_TWO_PI / DrawCircleSidesCount};
 
 		float Sin, Cos;
 		FMath::SinCos(&Sin, &Cos, DeltaAngle * i);
 
-		const auto NextVertex{Center + Radius * Cos * XAxis + Radius * Sin * YAxis};
+		const auto NextVertex{Location + Radius * Cos * XAxis + Radius * Sin * YAxis};
 
 		DrawDebugLine(World, PreviousVertex, NextVertex, FColor, bPersistent, Duration, DepthPriority, Thickness);
 
@@ -116,12 +196,12 @@ void UAlsUtility::DrawQuarterCircle(const UObject* WorldContext, const FVector& 
 #endif
 }
 
-void UAlsUtility::DrawDebugSphereAlternative(const UObject* WorldContext, const FVector& Center, const FRotator& Rotation,
+void UAlsUtility::DrawDebugSphereAlternative(const UObject* WorldContext, const FVector& Location, const FRotator& Rotation,
                                              const float Radius, const FLinearColor& Color, const float Duration,
                                              const float Thickness, const uint8 DepthPriority)
 {
 #if ENABLE_DRAW_DEBUG
-	const auto* World{WorldContext->GetWorld()};
+	const auto* World{IsValid(WorldContext) ? WorldContext->GetWorld() : nullptr};
 	if (!ALS_ENSURE(IsValid(World)))
 	{
 		return;
@@ -135,9 +215,9 @@ void UAlsUtility::DrawDebugSphereAlternative(const UObject* WorldContext, const 
 	FVector XAxis, YAxis, ZAxis;
 	RotationMatrix.GetScaledAxes(XAxis, YAxis, ZAxis);
 
-	DrawCircle(World, Center, XAxis, YAxis, FColor, Radius, DrawCircleSidesCount, bPersistent, Duration, DepthPriority, Thickness);
-	DrawCircle(World, Center, XAxis, ZAxis, FColor, Radius, DrawCircleSidesCount, bPersistent, Duration, DepthPriority, Thickness);
-	DrawCircle(World, Center, YAxis, ZAxis, FColor, Radius, DrawCircleSidesCount, bPersistent, Duration, DepthPriority, Thickness);
+	DrawCircle(World, Location, XAxis, YAxis, FColor, Radius, DrawCircleSidesCount, bPersistent, Duration, DepthPriority, Thickness);
+	DrawCircle(World, Location, XAxis, ZAxis, FColor, Radius, DrawCircleSidesCount, bPersistent, Duration, DepthPriority, Thickness);
+	DrawCircle(World, Location, YAxis, ZAxis, FColor, Radius, DrawCircleSidesCount, bPersistent, Duration, DepthPriority, Thickness);
 #endif
 }
 
@@ -146,7 +226,7 @@ void UAlsUtility::DrawDebugLineTraceSingle(const UObject* WorldContext, const FV
                                            const float Duration, const float Thickness, const uint8 DepthPriority)
 {
 #if ENABLE_DRAW_DEBUG
-	const auto* World{WorldContext->GetWorld()};
+	const auto* World{IsValid(WorldContext) ? WorldContext->GetWorld() : nullptr};
 	if (!ALS_ENSURE(IsValid(World)))
 	{
 		return;
@@ -163,11 +243,11 @@ void UAlsUtility::DrawDebugLineTraceSingle(const UObject* WorldContext, const FV
 #endif
 }
 
-void UAlsUtility::DrawDebugSweptSphere(const UObject* WorldContext, const FVector& Start, const FVector& End, const float Radius,
+void UAlsUtility::DrawDebugSweepSphere(const UObject* WorldContext, const FVector& Start, const FVector& End, const float Radius,
                                        const FLinearColor& Color, const float Duration, const float Thickness, const uint8 DepthPriority)
 {
 #if ENABLE_DRAW_DEBUG
-	const auto* World{WorldContext->GetWorld()};
+	const auto* World{IsValid(WorldContext) ? WorldContext->GetWorld() : nullptr};
 	if (!ALS_ENSURE(IsValid(World)))
 	{
 		return;
@@ -192,13 +272,13 @@ void UAlsUtility::DrawDebugSweepSingleSphere(const UObject* WorldContext, const 
                                              const float Duration, const float Thickness, const uint8 DepthPriority)
 {
 #if ENABLE_DRAW_DEBUG
-	const auto* World{WorldContext->GetWorld()};
+	const auto* World{IsValid(WorldContext) ? WorldContext->GetWorld() : nullptr};
 	if (!ALS_ENSURE(IsValid(World)))
 	{
 		return;
 	}
 
-	DrawDebugSweptSphere(World, Start, End, Radius, SweepColor.ToFColor(true), Duration, Thickness, DepthPriority);
+	DrawDebugSweepSphere(World, Start, End, Radius, SweepColor.ToFColor(true), Duration, Thickness, DepthPriority);
 
 	if (bHit && Hit.bBlockingHit)
 	{
@@ -218,7 +298,7 @@ void UAlsUtility::DrawDebugSweepSingleCapsule(const UObject* WorldContext, const
                                               const float Duration, const float Thickness, const uint8 DepthPriority)
 {
 #if ENABLE_DRAW_DEBUG
-	const auto* World{WorldContext->GetWorld()};
+	const auto* World{IsValid(WorldContext) ? WorldContext->GetWorld() : nullptr};
 	if (!ALS_ENSURE(IsValid(World)))
 	{
 		return;
@@ -252,7 +332,7 @@ void UAlsUtility::DrawDebugSweepSingleCapsuleAlternative(const UObject* WorldCon
                                                          const float Duration, const float Thickness, const uint8 DepthPriority)
 {
 #if ENABLE_DRAW_DEBUG
-	const auto* World{WorldContext->GetWorld()};
+	const auto* World{IsValid(WorldContext) ? WorldContext->GetWorld() : nullptr};
 	if (!ALS_ENSURE(IsValid(World)))
 	{
 		return;

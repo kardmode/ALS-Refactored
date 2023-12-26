@@ -11,10 +11,10 @@ class ALSEDITOR_API UAlsAnimationModifier_CreateLayeringCurves : public UAnimati
 
 protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Settings")
-	bool bOverrideExistingCurves;
+	uint8 bOverrideExistingCurves : 1;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Settings")
-	bool bAddKeyOnEachFrame;
+	uint8 bAddKeyOnEachFrame : 1;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Settings")
 	float CurveValue;
@@ -22,32 +22,32 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Settings")
 	TArray<FName> CurveNames
 	{
-		UAlsConstants::LayerHeadCurve(),
-		UAlsConstants::LayerHeadAdditiveCurve(),
-		UAlsConstants::LayerArmLeftCurve(),
-		UAlsConstants::LayerArmLeftAdditiveCurve(),
-		UAlsConstants::LayerArmLeftLocalSpaceCurve(),
-		UAlsConstants::LayerArmRightCurve(),
-		UAlsConstants::LayerArmRightAdditiveCurve(),
-		UAlsConstants::LayerArmRightLocalSpaceCurve(),
-		UAlsConstants::LayerHandLeftCurve(),
-		UAlsConstants::LayerHandRightCurve(),
-		UAlsConstants::LayerSpineCurve(),
-		UAlsConstants::LayerSpineAdditiveCurve(),
-		UAlsConstants::LayerPelvisCurve(),
-		UAlsConstants::LayerLegsCurve(),
+		UAlsConstants::LayerHeadCurveName(),
+		UAlsConstants::LayerHeadAdditiveCurveName(),
+		UAlsConstants::LayerArmLeftCurveName(),
+		UAlsConstants::LayerArmLeftAdditiveCurveName(),
+		UAlsConstants::LayerArmLeftLocalSpaceCurveName(),
+		UAlsConstants::LayerArmRightCurveName(),
+		UAlsConstants::LayerArmRightAdditiveCurveName(),
+		UAlsConstants::LayerArmRightLocalSpaceCurveName(),
+		UAlsConstants::LayerHandLeftCurveName(),
+		UAlsConstants::LayerHandRightCurveName(),
+		UAlsConstants::LayerSpineCurveName(),
+		UAlsConstants::LayerSpineAdditiveCurveName(),
+		UAlsConstants::LayerPelvisCurveName(),
+		UAlsConstants::LayerLegsCurveName(),
 
-		UAlsConstants::HandLeftIkCurve(),
-		UAlsConstants::HandRightIkCurve(),
+		UAlsConstants::HandLeftIkCurveName(),
+		UAlsConstants::HandRightIkCurveName(),
 
-		UAlsConstants::ViewBlockCurve(),
-		UAlsConstants::AllowAimingCurve(),
+		UAlsConstants::ViewBlockCurveName(),
+		UAlsConstants::AllowAimingCurveName(),
 
-		UAlsConstants::HipsDirectionLockCurve(),
+		UAlsConstants::HipsDirectionLockCurveName(),
 	};
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Settings")
-	bool bAddSlotCurves;
+	uint8 bAddSlotCurves : 1;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Settings")
 	float SlotCurveValue{1.0f};
@@ -55,12 +55,12 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Settings")
 	TArray<FName> SlotCurveNames
 	{
-		UAlsConstants::LayerHeadSlotCurve(),
-		UAlsConstants::LayerArmLeftSlotCurve(),
-		UAlsConstants::LayerArmRightSlotCurve(),
-		UAlsConstants::LayerSpineSlotCurve(),
-		UAlsConstants::LayerPelvisSlotCurve(),
-		UAlsConstants::LayerLegsSlotCurve(),
+		UAlsConstants::LayerHeadSlotCurveName(),
+		UAlsConstants::LayerArmLeftSlotCurveName(),
+		UAlsConstants::LayerArmRightSlotCurveName(),
+		UAlsConstants::LayerSpineSlotCurveName(),
+		UAlsConstants::LayerPelvisSlotCurveName(),
+		UAlsConstants::LayerLegsSlotCurveName(),
 	};
 
 public:

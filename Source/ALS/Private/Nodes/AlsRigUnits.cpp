@@ -1,67 +1,55 @@
 #include "Nodes/AlsRigUnits.h"
 
-#include "Animation/AnimTypes.h"
-#include "Units/RigUnitContext.h"
 #include "Utility/AlsMath.h"
 
-static bool TryCalculatePoleVector(const FVector& ALocation, const FVector& BLocation, const FVector& CLocation,
-                                   FVector& ProjectionLocation, FVector& Direction)
+#include UE_INLINE_GENERATED_CPP_BY_NAME(AlsRigUnits)
+
+FAlsRigVMFunction_Clamp01Float_Execute()
 {
-	auto AcVector{CLocation - ALocation};
-	auto AbVector{BLocation - ALocation};
-
-	if (!AcVector.Normalize())
-	{
-		if (!AbVector.Normalize())
-		{
-			return false;
-		}
-
-		ProjectionLocation = ALocation;
-		Direction = AbVector;
-
-		return true;
-	}
-
-	if (AbVector.IsNearlyZero())
-	{
-		return false;
-	}
-
-	ProjectionLocation = ALocation + AbVector.ProjectOnToNormal(AcVector);
-	Direction = (BLocation - ProjectionLocation).GetSafeNormal();
-
-	return true;
+	Result = UAlsMath::Clamp01(Value);
 }
 
-FAlsRigUnit_ExponentialDecayVector_Execute()
+void FAlsRigVMFunction_ExponentialDecayVector::Initialize()
+{
+	bInitialized = false;
+}
+
+FAlsRigVMFunction_ExponentialDecayVector_Execute()
 {
 	DECLARE_SCOPE_HIERARCHICAL_COUNTER_RIGUNIT()
 
-	Current = Context.State == EControlRigState::Init
-		          ? Target
-		          : UAlsMath::ExponentialDecay(Current, Target, Context.DeltaTime, Lambda);
+	if (!bInitialized)
+	{
+		Current = Target;
+
+		bInitialized = true;
+	}
+
+	Current = UAlsMath::ExponentialDecay(Current, Target, ExecuteContext.GetDeltaTime(), Lambda);
+}
+
+void FAlsRigUnit_CalculatePoleVector::Initialize()
+{
+	bInitialized = false;
 }
 
 FAlsRigUnit_CalculatePoleVector_Execute()
 {
 	DECLARE_SCOPE_HIERARCHICAL_COUNTER_RIGUNIT()
 
-	const auto* Hierarchy{Context.Hierarchy};
-	if (Hierarchy == nullptr)
+	const auto* Hierarchy{ExecuteContext.Hierarchy};
+	if (!IsValid(Hierarchy))
 	{
 		return;
 	}
 
-	if (Context.State == EControlRigState::Init)
+	if (!bInitialized)
 	{
 		CachedItemA.Reset();
 		CachedItemB.Reset();
 		CachedItemC.Reset();
-	}
-	else if (bInitial)
-	{
-		return;
+
+		bInitialized = true;
 	}
 
 	if (!CachedItemA.UpdateCache(ItemA, Hierarchy) ||
@@ -71,30 +59,28 @@ FAlsRigUnit_CalculatePoleVector_Execute()
 		return;
 	}
 
-	if (!bInitial)
+	const auto NewItemBLocation{Hierarchy->GetGlobalTransformByIndex(CachedItemB, bInitial).GetLocation()};
+	FVector NewItemBProjectionLocation;
+	FVector NewDirection;
+
+	if (!UAlsMath::TryCalculatePoleVector(Hierarchy->GetGlobalTransformByIndex(CachedItemA, bInitial).GetLocation(), NewItemBLocation,
+	                                      Hierarchy->GetGlobalTransformByIndex(CachedItemC, bInitial).GetLocation(),
+	                                      NewItemBProjectionLocation, NewDirection))
 	{
-		const auto NewEndLocation{Hierarchy->GetGlobalTransform(CachedItemB).GetLocation()};
-
-		if (TryCalculatePoleVector(Hierarchy->GetGlobalTransform(CachedItemA).GetLocation(), NewEndLocation,
-		                           Hierarchy->GetGlobalTransform(CachedItemC).GetLocation(), StartLocation, Direction))
-		{
-			EndLocation = NewEndLocation;
-			bSuccess = true;
-			return;
-		}
-	}
-
-	const auto NewEndLocation{Hierarchy->GetInitialGlobalTransform(CachedItemB).GetLocation()};
-
-	if (TryCalculatePoleVector(Hierarchy->GetInitialGlobalTransform(CachedItemA).GetLocation(), NewEndLocation,
-	                           Hierarchy->GetInitialGlobalTransform(CachedItemC).GetLocation(), StartLocation, Direction))
-	{
-		EndLocation = NewEndLocation;
-		bSuccess = true;
+		// Reuse the last successful result if a new pole vector can't be calculated.
+		bSuccess = false;
 		return;
 	}
 
-	bSuccess = false;
+	ItemBLocation = NewItemBLocation;
+	ItemBProjectionLocation = NewItemBProjectionLocation;
+	Direction = NewDirection;
+	bSuccess = true;
+}
+
+void FAlsRigUnit_HandIkRetargeting::Initialize()
+{
+	bInitialized = false;
 }
 
 FAlsRigUnit_HandIkRetargeting_Execute()
@@ -102,19 +88,25 @@ FAlsRigUnit_HandIkRetargeting_Execute()
 	DECLARE_SCOPE_HIERARCHICAL_COUNTER_RIGUNIT()
 
 	auto* Hierarchy{ExecuteContext.Hierarchy};
-	if (Hierarchy == nullptr)
+	if (!IsValid(Hierarchy))
 	{
 		return;
 	}
 
-	if (Context.State == EControlRigState::Init)
+	if (!bInitialized)
 	{
 		CachedLeftHandBone.Reset();
 		CachedLeftHandIkBone.Reset();
 		CachedRightHandBone.Reset();
 		CachedRightHandIkBone.Reset();
 		CachedBonesToMove.Reset();
-		return;
+
+		for (auto& Bone : CachedBonesToMove)
+		{
+			Bone.Reset();
+		}
+
+		bInitialized = true;
 	}
 
 	if (!CachedLeftHandBone.UpdateCache(LeftHandBone, Hierarchy) ||
@@ -162,24 +154,17 @@ FAlsRigUnit_HandIkRetargeting_Execute()
 	if (CachedBonesToMove.Num() != BonesToMove.Num())
 	{
 		CachedBonesToMove.Reset();
-		CachedBonesToMove.SetNum(CachedBonesToMove.Num());
+		CachedBonesToMove.SetNum(BonesToMove.Num());
 	}
 
 	for (auto i{0}; i < BonesToMove.Num(); i++)
 	{
-		if (Context.State == EControlRigState::Init)
+		if (CachedBonesToMove[i].UpdateCache(BonesToMove[i], Hierarchy))
 		{
-			CachedBonesToMove[i].Reset();
+			auto BoneTransform{Hierarchy->GetGlobalTransform(CachedBonesToMove[i])};
+			BoneTransform.AddToTranslation(RetargetingOffset);
+
+			Hierarchy->SetGlobalTransform(CachedBonesToMove[i], BoneTransform, bPropagateToChildren);
 		}
-
-		if (!CachedBonesToMove[i].UpdateCache(BonesToMove[i], Hierarchy))
-		{
-			continue;
-		}
-
-		auto BoneTransform{Hierarchy->GetGlobalTransform(CachedBonesToMove[i])};
-		BoneTransform.AddToTranslation(RetargetingOffset);
-
-		Hierarchy->SetGlobalTransform(CachedBonesToMove[i], BoneTransform, bPropagateToChildren);
 	}
 }

@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Camera/CameraTypes.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Utility/AlsMath.h"
 #include "AlsCameraComponent.generated.h"
@@ -8,18 +7,18 @@
 class UAlsCameraSettings;
 class ACharacter;
 
-UCLASS(HideCategories = ("ComponentTick", "Clothing", "Physics", "MasterPoseComponent", "Collision",
-	"AnimationRig", "Lighting", "Deformer", "Rendering", "HLOD", "Navigation", "VirtualTexture", "SkeletalMesh",
-	"Optimization", "LOD", "MaterialParameters", "TextureStreaming", "Mobile", "RayTracing"))
+UCLASS(HideCategories = ("ComponentTick", "Clothing", "Physics", "MasterPoseComponent", "Collision", "AnimationRig",
+	"Lighting", "Deformer", "Rendering", "PathTracing", "HLOD", "Navigation", "VirtualTexture", "SkeletalMesh",
+	"LeaderPoseComponent", "Optimization", "LOD", "MaterialParameters", "TextureStreaming", "Mobile", "RayTracing"))
 class ALSCAMERA_API UAlsCameraComponent : public USkeletalMeshComponent
 {
 	GENERATED_BODY()
 
 protected:
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Settings")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Settings")
 	TObjectPtr<UAlsCameraSettings> Settings;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Settings", Meta = (ClampMin = 0, ClampMax = 1))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings", Meta = (ClampMin = 0, ClampMax = 1))
 	float PostProcessWeight;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient)
@@ -28,7 +27,7 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient, Meta = (ShowInnerProperties))
 	TWeakObjectPtr<UAnimInstance> AnimationInstance;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient, Meta = (ForceUnits = "x"))
 	float PreviousGlobalTimeDilation{1.0f};
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient)
@@ -46,19 +45,33 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient)
 	FRotator CameraRotation;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient, Meta = (ClampMin = 0, ClampMax = 1))
+	UPROPERTY(BlueprintReadOnly, Category = "State", Transient)
+	TObjectPtr<UPrimitiveComponent> MovementBasePrimitive;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient)
+	FName MovementBaseBoneName;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient)
+	FVector PivotMovementBaseRelativeLagLocation;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient)
+	FQuat CameraMovementBaseRelativeRotation;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient, Meta = (ClampMin = 0, ClampMax = 1, ForceUnits = "%"))
 	float TraceDistanceRatio{1.0f};
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient, Meta = (ClampMin = 5, ClampMax = 360, ForceUnits = "deg"))
 	float CameraFov{90.0f};
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient)
-	bool bRightShoulder{true};
+	uint8 bRightShoulder : 1 {true};
 
 public:
 	UAlsCameraComponent();
 
 	virtual void OnRegister() override;
+
+	virtual void RegisterComponentTickFunctions(bool bRegister) override;
 
 	virtual void Activate(bool bReset) override;
 
@@ -68,6 +81,8 @@ public:
 
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
+	virtual void CompleteParallelAnimationEvaluation(bool bDoPostAnimationEvaluation) override;
+
 public:
 	float GetPostProcessWeight() const;
 
@@ -75,19 +90,19 @@ public:
 
 	bool IsRightShoulder() const;
 
-	UFUNCTION(BlueprintCallable, Category = "ALS|Als Camera")
+	UFUNCTION(BlueprintCallable, Category = "ALS|Camera")
 	void SetRightShoulder(bool bNewRightShoulder);
 
-	UFUNCTION(BlueprintPure, Category = "ALS|Als Camera")
+	UFUNCTION(BlueprintPure, Category = "ALS|Camera", Meta = (ReturnDisplayName = "Camera Location"))
 	FVector GetFirstPersonCameraLocation() const;
 
-	UFUNCTION(BlueprintPure, Category = "ALS|Als Camera")
-	FTransform GetThirdPersonPivotTransform() const;
+	UFUNCTION(BlueprintPure, Category = "ALS|Camera", Meta = (ReturnDisplayName = "Pivot Location"))
+	FVector GetThirdPersonPivotLocation() const;
 
-	UFUNCTION(BlueprintPure, Category = "ALS|Als Camera")
+	UFUNCTION(BlueprintPure, Category = "ALS|Camera", Meta = (ReturnDisplayName = "Trace Start"))
 	FVector GetThirdPersonTraceStartLocation() const;
 
-	UFUNCTION(BlueprintCallable, Category = "ALS|Als Camera")
+	UFUNCTION(BlueprintCallable, Category = "ALS|Camera")
 	void GetViewInfo(FMinimalViewInfo& ViewInfo) const;
 
 private:
@@ -97,19 +112,19 @@ private:
 
 	FVector CalculatePivotLagLocation(const FQuat& CameraYawRotation, float DeltaTime, bool bAllowLag) const;
 
-	FVector CalculatePivotOffset(const FQuat& PivotTargetRotation) const;
+	FVector CalculatePivotOffset() const;
 
 	FVector CalculateCameraOffset() const;
 
 	FVector CalculateCameraTrace(const FVector& CameraTargetLocation, const FVector& PivotOffset,
 	                             float DeltaTime, bool bAllowLag, float& NewTraceDistanceRatio) const;
 
-	bool TryFindBlockingGeometryAdjustedLocation(FVector& Location, bool bDisplayDebugCameraTraces) const;
+	bool TryAdjustLocationBlockedByGeometry(FVector& Location, bool bDisplayDebugCameraTraces) const;
 
 	// Debug
 
 public:
-	void DisplayDebug(const UCanvas* Canvas, const FDebugDisplayInfo& DebugDisplay, float& VerticalLocation) const;
+	void DisplayDebug(const UCanvas* Canvas, const FDebugDisplayInfo& DisplayInfo, float& VerticalLocation) const;
 
 private:
 	static void DisplayDebugHeader(const UCanvas* Canvas, const FText& HeaderText, const FLinearColor& HeaderColor,

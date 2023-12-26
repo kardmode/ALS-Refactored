@@ -1,41 +1,17 @@
 #include "Utility/AlsMath.h"
 
-template <class ValueType, class StateType>
-ValueType UAlsMath::SpringDamp(const ValueType& Current, const ValueType& Target, StateType& SpringState, const float DeltaTime,
-                               const float Frequency, const float DampingRatio, const float TargetVelocityAmount)
-{
-	if (DeltaTime <= SMALL_NUMBER)
-	{
-		return Current;
-	}
+#include "State/AlsMovementDirection.h"
 
-	if (!SpringState.bStateValid)
-	{
-		SpringState.Velocity = ValueType{0.0f};
-		SpringState.PreviousTarget = Target;
-		SpringState.bStateValid = true;
+#include UE_INLINE_GENERATED_CPP_BY_NAME(AlsMath)
 
-		return Target;
-	}
-
-	ValueType Result{Current};
-	FMath::SpringDamper(Result, SpringState.Velocity, Target,
-	                    (Target - SpringState.PreviousTarget) * (Clamp01(TargetVelocityAmount) / DeltaTime),
-	                    DeltaTime, Frequency, DampingRatio);
-
-	SpringState.PreviousTarget = Target;
-
-	return Result;
-}
-
-float UAlsMath::SpringDampFloat(const float Current, const float Target, FAlsSpringFloatState& SpringState,
-                                const float DeltaTime, const float Frequency, const float DampingRatio, const float TargetVelocityAmount)
+float UAlsMath::SpringDampFloat(const float Current, const float Target, FAlsSpringFloatState& SpringState, const float DeltaTime,
+                                const float Frequency, const float DampingRatio, const float TargetVelocityAmount)
 {
 	return SpringDamp(Current, Target, SpringState, DeltaTime, Frequency, DampingRatio, TargetVelocityAmount);
 }
 
-FVector UAlsMath::SpringDampVector(const FVector& Current, const FVector& Target, FAlsSpringVectorState& SpringState,
-                                   const float DeltaTime, const float Frequency, const float DampingRatio, const float TargetVelocityAmount)
+FVector UAlsMath::SpringDampVector(const FVector& Current, const FVector& Target, FAlsSpringVectorState& SpringState, const float DeltaTime,
+                                   const float Frequency, const float DampingRatio, const float TargetVelocityAmount)
 {
 	return SpringDamp(Current, Target, SpringState, DeltaTime, Frequency, DampingRatio, TargetVelocityAmount);
 }
@@ -79,4 +55,35 @@ EAlsMovementDirection UAlsMath::CalculateMovementDirection(const float Angle, co
 	}
 
 	return EAlsMovementDirection::Backward;
+}
+
+bool UAlsMath::TryCalculatePoleVector(const FVector& ALocation, const FVector& BLocation, const FVector& CLocation,
+                                      FVector& ProjectionLocation, FVector& Direction)
+{
+	const auto AbVector{BLocation - ALocation};
+	if (AbVector.IsNearlyZero())
+	{
+		// Can't do anything if A and B are equal.
+
+		ProjectionLocation = ALocation;
+		Direction = FVector::ZeroVector;
+
+		return false;
+	}
+
+	auto AcVector{CLocation - ALocation};
+	if (!AcVector.Normalize())
+	{
+		// Only A and C are equal.
+
+		ProjectionLocation = ALocation;
+		Direction = AbVector.GetUnsafeNormal(); // A and B are not equal, so normalization will be safe.
+
+		return true;
+	}
+
+	ProjectionLocation = ALocation + AbVector.ProjectOnToNormal(AcVector);
+	Direction = BLocation - ProjectionLocation;
+
+	return Direction.Normalize(); // Direction will be zero and cannot be normalized if A, B and C are collinear.
 }

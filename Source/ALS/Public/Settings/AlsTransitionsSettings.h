@@ -10,13 +10,13 @@ struct ALS_API FAlsTransitionsSettings
 	GENERATED_BODY()
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS", Meta = (ClampMin = 0, ForceUnits = "s"))
-	float QuickStopBlendInTime{0.1f};
+	float QuickStopBlendInDuration{0.1f};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS", Meta = (ClampMin = 0, ForceUnits = "s"))
-	float QuickStopBlendOutTime{0.2f};
+	float QuickStopBlendOutDuration{0.2f};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS", Meta = (ClampMin = 0))
-	FVector2D QuickStopPlayRate{1.75f, 3.0f};
+	FVector2f QuickStopPlayRate{1.75f, 3.0f};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS", Meta = (ClampMin = 0, ForceUnits = "s"))
 	float QuickStopStartTime{0.3f};
@@ -37,7 +37,7 @@ struct ALS_API FAlsTransitionsSettings
 	float DynamicTransitionFootLockDistanceThreshold{8.0f};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS", Meta = (ClampMin = 0, ForceUnits = "s"))
-	float DynamicTransitionBlendTime{0.2f};
+	float DynamicTransitionBlendDuration{0.2f};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS", Meta = (ClampMin = 0, ForceUnits = "x"))
 	float DynamicTransitionPlayRate{1.5f};

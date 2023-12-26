@@ -3,36 +3,12 @@
 #include "AlsLocomotionAnimationState.generated.h"
 
 USTRUCT(BlueprintType)
-struct ALS_API FAlsBasedMovementState
-{
-	GENERATED_BODY()
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
-	TObjectPtr<UPrimitiveComponent> Primitive{nullptr};
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
-	FName BoneName;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
-	bool bBaseChanged{false};
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
-	bool bHasRelativeLocation{false};
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
-	FVector Location{ForceInit};
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
-	FQuat Rotation{ForceInit};
-};
-
-USTRUCT(BlueprintType)
 struct ALS_API FAlsLocomotionAnimationState
 {
 	GENERATED_BODY()
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
-	bool bHasInput{false};
+	uint8 bHasInput : 1 {false};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS", Meta = (ClampMin = -180, ClampMax = 180, ForceUnits = "deg"))
 	float InputYawAngle{0.0f};
@@ -59,10 +35,10 @@ struct ALS_API FAlsLocomotionAnimationState
 	float WalkableFloorZ{0.0f};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
-	bool bMoving{false};
+	uint8 bMoving : 1 {false};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
-	bool bMovingSmooth{false};
+	uint8 bMovingSmooth : 1 {false};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS", Meta = (ClampMin = -180, ClampMax = 180, ForceUnits = "deg"))
 	float TargetYawAngle{0.0f};
@@ -79,7 +55,7 @@ struct ALS_API FAlsLocomotionAnimationState
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS", Meta = (ForceUnits = "deg/s"))
 	float YawSpeed{0.0f};
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS", Meta = (ForceUnits = "x"))
 	float Scale{1.0f};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS", Meta = (ClampMin = 0, ForceUnits = "cm"))
@@ -87,7 +63,4 @@ struct ALS_API FAlsLocomotionAnimationState
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS", Meta = (ClampMin = 0, ForceUnits = "cm"))
 	float CapsuleHalfHeight{0.0f};
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
-	FAlsBasedMovementState BasedMovement;
 };

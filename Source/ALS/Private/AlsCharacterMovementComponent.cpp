@@ -4,8 +4,12 @@
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Curves/CurveVector.h"
+#include "Engine/World.h"
 #include "GameFramework/Controller.h"
 #include "Utility/AlsMacros.h"
+#include "Utility/AlsUtility.h"
+
+#include UE_INLINE_GENERATED_CPP_BY_NAME(AlsCharacterMovementComponent)
 
 void FAlsCharacterNetworkMoveData::ClientFillNetworkMoveData(const FSavedMove_Character& Move, const ENetworkMoveType MoveType)
 {
@@ -23,7 +27,7 @@ bool FAlsCharacterNetworkMoveData::Serialize(UCharacterMovementComponent& Moveme
 {
 	Super::Serialize(Movement, Archive, Map, MoveType);
 
-	NetSerializeOptionalValue(Archive.IsSaving(), Archive, RotationMode, AlsRotationModeTags::LookingDirection.GetTag(), Map);
+	NetSerializeOptionalValue(Archive.IsSaving(), Archive, RotationMode, AlsRotationModeTags::ViewDirection.GetTag(), Map);
 	NetSerializeOptionalValue(Archive.IsSaving(), Archive, Stance, AlsStanceTags::Standing.GetTag(), Map);
 	NetSerializeOptionalValue(Archive.IsSaving(), Archive, MaxAllowedGait, AlsGaitTags::Walking.GetTag(), Map);
 
@@ -41,7 +45,7 @@ void FAlsSavedMove::Clear()
 {
 	Super::Clear();
 
-	RotationMode = AlsRotationModeTags::LookingDirection;
+	RotationMode = AlsRotationModeTags::ViewDirection;
 	Stance = AlsStanceTags::Standing;
 	MaxAllowedGait = AlsGaitTags::Walking;
 }
@@ -73,15 +77,22 @@ bool FAlsSavedMove::CanCombineWith(const FSavedMovePtr& NewMovePtr, ACharacter* 
 void FAlsSavedMove::CombineWith(const FSavedMove_Character* PreviousMove, ACharacter* Character,
                                 APlayerController* Player, const FVector& PreviousStartLocation)
 {
-	const auto* Movement{Character->GetCharacterMovement()};
-	const auto InitialRotation{Movement->UpdatedComponent->GetComponentRotation()};
+	// Calling Super::CombineWith() will force change the character's rotation to the rotation from the previous move, which is
+	// undesirable because it will erase our rotation changes made in the AAlsCharacter class. So, to keep the rotation unchanged,
+	// we simply override the saved rotations with the current rotation, and after calling Super::CombineWith() we restore them.
+
+	const auto OriginalRotation{PreviousMove->StartRotation};
+	const auto OriginalRelativeRotation{PreviousMove->StartAttachRelativeRotation};
+
+	const auto* UpdatedComponent{Character->GetCharacterMovement()->UpdatedComponent.Get()};
+
+	const_cast<FSavedMove_Character*>(PreviousMove)->StartRotation = UpdatedComponent->GetComponentRotation();
+	const_cast<FSavedMove_Character*>(PreviousMove)->StartAttachRelativeRotation = UpdatedComponent->GetRelativeRotation();
 
 	Super::CombineWith(PreviousMove, Character, Player, PreviousStartLocation);
 
-	// Restore initial rotation after movement combining. Without this, any rotation applied in
-	// the character class will be discarded and the character will not be able to rotate properly.
-
-	Movement->UpdatedComponent->SetWorldRotation(InitialRotation, false, nullptr, Movement->GetTeleportType());
+	const_cast<FSavedMove_Character*>(PreviousMove)->StartRotation = OriginalRotation;
+	const_cast<FSavedMove_Character*>(PreviousMove)->StartAttachRelativeRotation = OriginalRelativeRotation;
 }
 
 void FAlsSavedMove::PrepMoveFor(ACharacter* Character)
@@ -110,6 +121,8 @@ UAlsCharacterMovementComponent::UAlsCharacterMovementComponent()
 {
 	SetNetworkMoveDataContainer(MoveDataContainer);
 
+	bTickBeforeOwner = true;
+
 	// NetworkMaxSmoothUpdateDistance = 92.0f;
 	// NetworkNoSmoothUpdateDistance = 140.0f;
 
@@ -124,6 +137,12 @@ UAlsCharacterMovementComponent::UAlsCharacterMovementComponent()
 	MaxWalkSpeedCrouched = 200.0f;
 	MinAnalogWalkSpeed = 25.0f;
 	bCanWalkOffLedgesWhenCrouching = true;
+
+	// bImpartBaseVelocityX = false;
+	// bImpartBaseVelocityY = false;
+	// bImpartBaseVelocityZ = false;
+	// bImpartBaseAngularVelocity = false;
+
 	bIgnoreBaseRotation = true;
 
 	PerchRadiusThreshold = 20.0f;
@@ -137,7 +156,7 @@ UAlsCharacterMovementComponent::UAlsCharacterMovementComponent()
 	FallingLateralFriction = 1.0f;
 	JumpOffJumpZFactor = 0.0f;
 
-	bNetworkAlwaysReplicateTransformUpdateTimestamp = true; // Required for view interpolation.
+	bNetworkAlwaysReplicateTransformUpdateTimestamp = true; // Required for view network smoothing.
 
 	RotationRate = FRotator::ZeroRotator;
 	bUseControllerDesiredRotation = false;
@@ -154,7 +173,6 @@ UAlsCharacterMovementComponent::UAlsCharacterMovementComponent()
 bool UAlsCharacterMovementComponent::CanEditChange(const FProperty* Property) const
 {
 	return Super::CanEditChange(Property) &&
-	       Property->GetFName() != GET_MEMBER_NAME_CHECKED(ThisClass, bIgnoreBaseRotation) &&
 	       Property->GetFName() != GET_MEMBER_NAME_CHECKED(ThisClass, RotationRate) &&
 	       Property->GetFName() != GET_MEMBER_NAME_CHECKED(ThisClass, bUseControllerDesiredRotation) &&
 	       Property->GetFName() != GET_MEMBER_NAME_CHECKED(ThisClass, bOrientRotationToMovement);
@@ -163,8 +181,6 @@ bool UAlsCharacterMovementComponent::CanEditChange(const FProperty* Property) co
 
 void UAlsCharacterMovementComponent::BeginPlay()
 {
-	ALS_ENSURE_MESSAGE(bIgnoreBaseRotation, TEXT("Non-ignored base rotation is not supported."));
-
 	ALS_ENSURE_MESSAGE(!bUseControllerDesiredRotation && !bOrientRotationToMovement,
 	                   TEXT("These settings are not allowed and must be turned off!"));
 
@@ -187,6 +203,58 @@ void UAlsCharacterMovementComponent::OnMovementModeChanged(const EMovementMode P
 	// character automatically uncrouches at the end of the roll in the air.
 
 	bCrouchMaintainsBaseLocation = true;
+}
+
+bool UAlsCharacterMovementComponent::ShouldPerformAirControlForPathFollowing() const
+{
+	return !bInputBlocked && Super::ShouldPerformAirControlForPathFollowing();
+}
+
+void UAlsCharacterMovementComponent::UpdateBasedRotation(FRotator& FinalRotation, const FRotator& ReducedRotation)
+{
+	// Ignore the parent implementation of this function and provide our own, because the parent
+	// implementation has no effect when we ignore rotation changes in AAlsCharacter::FaceRotation().
+
+	const auto& BasedMovement{CharacterOwner->GetBasedMovement()};
+
+	FVector MovementBaseLocation;
+	FQuat MovementBaseRotation;
+
+	MovementBaseUtility::GetMovementBaseTransform(BasedMovement.MovementBase, BasedMovement.BoneName,
+	                                              MovementBaseLocation, MovementBaseRotation);
+
+	if (!OldBaseQuat.Equals(MovementBaseRotation, UE_SMALL_NUMBER))
+	{
+		const auto DeltaRotation{(MovementBaseRotation * OldBaseQuat.Inverse()).Rotator()};
+		auto NewControlRotation{CharacterOwner->Controller->GetControlRotation()};
+
+		NewControlRotation.Pitch += DeltaRotation.Pitch;
+		NewControlRotation.Yaw += DeltaRotation.Yaw;
+		NewControlRotation.Normalize();
+
+		CharacterOwner->Controller->SetControlRotation(NewControlRotation);
+	}
+}
+
+bool UAlsCharacterMovementComponent::ApplyRequestedMove(const float DeltaTime, const float CurrentMaxAcceleration,
+                                                        const float MaxSpeed, const float Friction, const float BrakingDeceleration,
+                                                        FVector& RequestedAcceleration, float& RequestedSpeed)
+{
+	return !bInputBlocked && Super::ApplyRequestedMove(DeltaTime, CurrentMaxAcceleration, MaxSpeed, Friction,
+	                                                   BrakingDeceleration, RequestedAcceleration, RequestedSpeed);
+}
+
+void UAlsCharacterMovementComponent::CalcVelocity(const float DeltaTime, const float Friction,
+                                                  const bool bFluid, const float BrakingDeceleration)
+{
+	FRotator BaseRotationSpeed;
+	if (!bIgnoreBaseRotation && UAlsUtility::TryGetMovementBaseRotationSpeed(CharacterOwner->GetBasedMovement(), BaseRotationSpeed))
+	{
+		// Offset the velocity to keep it relative to the movement base.
+		Velocity = (BaseRotationSpeed * DeltaTime).RotateVector(Velocity);
+	}
+
+	Super::CalcVelocity(DeltaTime, Friction, bFluid, BrakingDeceleration);
 }
 
 float UAlsCharacterMovementComponent::GetMaxAcceleration() const
@@ -237,13 +305,12 @@ void UAlsCharacterMovementComponent::PhysWalking(const float DeltaTime, int32 It
 		GroundFriction = GaitSettings.AccelerationAndDecelerationAndGroundFrictionCurve->FloatCurves[2].Eval(CalculateGaitAmount());
 	}
 
-	// TODO Copied with modifications from UCharacterMovementComponent::PhysWalking().
-	// TODO After the release of a new engine version, this code should be updated to match the source code.
+	// TODO Copied with modifications from UCharacterMovementComponent::PhysWalking(). After the
+	// TODO release of a new engine version, this code should be updated to match the source code.
 
 	// ReSharper disable All
 
 	// SCOPE_CYCLE_COUNTER(STAT_CharPhysWalking);
-	CSV_SCOPED_TIMING_STAT_EXCLUSIVE(CharPhysWalking);
 
 	if (DeltaTime < MIN_TICK_TIME)
 	{
@@ -289,7 +356,7 @@ void UAlsCharacterMovementComponent::PhysWalking(const float DeltaTime, int32 It
 		// Ensure velocity is horizontal.
 		MaintainHorizontalGroundVelocity();
 		const FVector OldVelocity = Velocity;
-		Acceleration.Z = 0.f;
+		Acceleration = FVector::VectorPlaneProject(Acceleration, -GetGravityDirection());
 
 		// Apply acceleration
 		if( !HasAnimRootMotion() && !CurrentRootMotion.HasOverrideVelocity() )
@@ -328,7 +395,7 @@ void UAlsCharacterMovementComponent::PhysWalking(const float DeltaTime, int32 It
 			{
 				// pawn decided to jump up
 				const float DesiredDist = Delta.Size();
-				if (DesiredDist > KINDA_SMALL_NUMBER)
+				if (DesiredDist > UE_KINDA_SMALL_NUMBER)
 				{
 					const float ActualDist = (UpdatedComponent->GetComponentLocation() - OldLocation).Size2D();
 					remainingTime += timeTick * (1.f - FMath::Min(1.f,ActualDist/DesiredDist));
@@ -359,7 +426,7 @@ void UAlsCharacterMovementComponent::PhysWalking(const float DeltaTime, int32 It
 		if ( bCheckLedges && !CurrentFloor.IsWalkableFloor() )
 		{
 			// calculate possible alternate movement
-			const FVector GravDir = FVector(0.f,0.f,-1.f);
+			const FVector GravDir = GetGravityDirection();
 			const FVector NewDelta = bTriedLedgeMove ? FVector::ZeroVector : GetLedgeMove(OldLocation, Delta, GravDir);
 			if ( !NewDelta.IsZero() )
 			{
@@ -401,7 +468,11 @@ void UAlsCharacterMovementComponent::PhysWalking(const float DeltaTime, int32 It
 					HandleWalkingOffLedge(OldFloor.HitResult.ImpactNormal, OldFloor.HitResult.Normal, OldLocation, timeTick);
 					if (IsMovingOnGround())
 					{
+						// TODO Start of custom ALS code block.
+
 						ApplyPendingPenetrationAdjustment();
+
+						// TODO End of custom ALS code block.
 
 						// If still walking, then fall. If not, assume the user set a different mode they want to keep.
 						StartFalling(Iterations, remainingTime, timeTick, Delta, OldLocation);
@@ -409,7 +480,11 @@ void UAlsCharacterMovementComponent::PhysWalking(const float DeltaTime, int32 It
 					return;
 				}
 
+				// TODO Start of custom ALS code block.
+
 				ApplyPendingPenetrationAdjustment();
+
+				// TODO End of custom ALS code block.
 
 				AdjustFloorHeight();
 				SetBase(CurrentFloor.HitResult.Component.Get(), CurrentFloor.HitResult.BoneName);
@@ -419,7 +494,7 @@ void UAlsCharacterMovementComponent::PhysWalking(const float DeltaTime, int32 It
 				// The floor check failed because it started in penetration
 				// We do not want to try to move downward because the downward sweep failed, rather we'd like to try to pop out of the floor.
 				FHitResult Hit(CurrentFloor.HitResult);
-				Hit.TraceEnd = Hit.TraceStart + FVector(0.f, 0.f, MAX_FLOOR_DIST);
+				Hit.TraceEnd = Hit.TraceStart + RotateGravityToWorld(FVector(0.f, 0.f, MAX_FLOOR_DIST));
 				const FVector RequestedAdjustment = GetPenetrationAdjustment(Hit);
 				ResolvePenetration(RequestedAdjustment, Hit, UpdatedComponent->GetComponentQuat());
 				bForceNextFloorCheck = true;
@@ -451,6 +526,13 @@ void UAlsCharacterMovementComponent::PhysWalking(const float DeltaTime, int32 It
 			// Make velocity reflect actual move
 			if( !bJustTeleported && !HasAnimRootMotion() && !CurrentRootMotion.HasOverrideVelocity() && timeTick >= MIN_TICK_TIME)
 			{
+				// TODO Start of custom ALS code block.
+
+				PrePenetrationAdjustmentVelocity = MoveVelocity;
+				bPrePenetrationAdjustmentVelocityValid = true;
+
+				// TODO End of custom ALS code block.
+
 				// TODO-RootMotionSource: Allow this to happen during partial override Velocity, but only set allowed axes?
 				Velocity = (UpdatedComponent->GetComponentLocation() - OldLocation) / timeTick;
 				MaintainHorizontalGroundVelocity();
@@ -510,6 +592,183 @@ void UAlsCharacterMovementComponent::PhysCustom(const float DeltaTime, int32 Ite
 	Super::PhysCustom(DeltaTime, Iterations);
 }
 
+FVector UAlsCharacterMovementComponent::ConsumeInputVector()
+{
+	auto InputVector{Super::ConsumeInputVector()};
+
+	if (bInputBlocked)
+	{
+		return FVector::ZeroVector;
+	}
+
+	FRotator BaseRotationSpeed;
+	if (!bIgnoreBaseRotation && UAlsUtility::TryGetMovementBaseRotationSpeed(CharacterOwner->GetBasedMovement(), BaseRotationSpeed))
+	{
+		// Offset the input vector to keep it relative to the movement base.
+		InputVector = (BaseRotationSpeed * GetWorld()->GetDeltaSeconds()).RotateVector(InputVector);
+	}
+
+	return InputVector;
+}
+
+void UAlsCharacterMovementComponent::ComputeFloorDist(const FVector& CapsuleLocation, float LineDistance, float SweepDistance,
+                                                      FFindFloorResult& OutFloorResult, float SweepRadius,
+                                                      const FHitResult* DownwardSweepResult) const
+{
+	// TODO Copied with modifications from UCharacterMovementComponent::ComputeFloorDist().
+	// TODO After the release of a new engine version, this code should be updated to match the source code.
+
+	// ReSharper disable All
+
+	// UE_LOG(LogCharacterMovement, VeryVerbose, TEXT("[Role:%d] ComputeFloorDist: %s at location %s"), (int32)CharacterOwner->GetLocalRole(), *GetNameSafe(CharacterOwner), *CapsuleLocation.ToString());
+	OutFloorResult.Clear();
+
+	float PawnRadius, PawnHalfHeight;
+	CharacterOwner->GetCapsuleComponent()->GetScaledCapsuleSize(PawnRadius, PawnHalfHeight);
+
+	bool bSkipSweep = false;
+	if (DownwardSweepResult != NULL && DownwardSweepResult->IsValidBlockingHit())
+	{
+		// Only if the supplied sweep was vertical and downward.
+		const bool bIsDownward = RotateWorldToGravity(DownwardSweepResult->TraceStart - DownwardSweepResult->TraceEnd).Z > 0;
+		const bool bIsVertical = RotateWorldToGravity(DownwardSweepResult->TraceStart - DownwardSweepResult->TraceEnd).SizeSquared2D() <= UE_KINDA_SMALL_NUMBER;
+		if (bIsDownward && bIsVertical)
+		{
+			// Reject hits that are barely on the cusp of the radius of the capsule
+			if (IsWithinEdgeTolerance(DownwardSweepResult->Location, DownwardSweepResult->ImpactPoint, PawnRadius))
+			{
+				// Don't try a redundant sweep, regardless of whether this sweep is usable.
+				bSkipSweep = true;
+
+				const bool bIsWalkable = IsWalkable(*DownwardSweepResult);
+				const float FloorDist = RotateWorldToGravity(CapsuleLocation - DownwardSweepResult->Location).Z;
+				OutFloorResult.SetFromSweep(*DownwardSweepResult, FloorDist, bIsWalkable);
+
+				if (bIsWalkable)
+				{
+					// Use the supplied downward sweep as the floor hit result.
+					return;
+				}
+			}
+		}
+	}
+
+	// We require the sweep distance to be >= the line distance, otherwise the HitResult can't be interpreted as the sweep result.
+	if (SweepDistance < LineDistance)
+	{
+		ensure(SweepDistance >= LineDistance);
+		return;
+	}
+
+	bool bBlockingHit = false;
+	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(ComputeFloorDist), false, CharacterOwner);
+	FCollisionResponseParams ResponseParam;
+	InitCollisionParams(QueryParams, ResponseParam);
+	const ECollisionChannel CollisionChannel = UpdatedComponent->GetCollisionObjectType();
+
+	// Sweep test
+	if (!bSkipSweep && SweepDistance > 0.f && SweepRadius > 0.f)
+	{
+		// Use a shorter height to avoid sweeps giving weird results if we start on a surface.
+		// This also allows us to adjust out of penetrations.
+		const float ShrinkScale = 0.9f;
+		const float ShrinkScaleOverlap = 0.1f;
+		float ShrinkHeight = (PawnHalfHeight - PawnRadius) * (1.f - ShrinkScale);
+		float TraceDist = SweepDistance + ShrinkHeight;
+		FCollisionShape CapsuleShape = FCollisionShape::MakeCapsule(SweepRadius, PawnHalfHeight - ShrinkHeight);
+
+		FHitResult Hit(1.f);
+		bBlockingHit = FloorSweepTest(Hit, CapsuleLocation, CapsuleLocation + RotateGravityToWorld(FVector(0.f,0.f,-TraceDist)), CollisionChannel, CapsuleShape, QueryParams, ResponseParam);
+
+		// TODO Start of custom ALS code block.
+
+		const_cast<ThisClass*>(this)->SavePenetrationAdjustment(Hit);
+
+		// TODO End of custom ALS code block.
+
+		if (bBlockingHit)
+		{
+			// Reject hits adjacent to us, we only care about hits on the bottom portion of our capsule.
+			// Check 2D distance to impact point, reject if within a tolerance from radius.
+			if (Hit.bStartPenetrating || !IsWithinEdgeTolerance(CapsuleLocation, Hit.ImpactPoint, CapsuleShape.Capsule.Radius))
+			{
+				// Use a capsule with a slightly smaller radius and shorter height to avoid the adjacent object.
+				// Capsule must not be nearly zero or the trace will fall back to a line trace from the start point and have the wrong length.
+				CapsuleShape.Capsule.Radius = FMath::Max(0.f, CapsuleShape.Capsule.Radius - SWEEP_EDGE_REJECT_DISTANCE - UE_KINDA_SMALL_NUMBER);
+				if (!CapsuleShape.IsNearlyZero())
+				{
+					ShrinkHeight = (PawnHalfHeight - PawnRadius) * (1.f - ShrinkScaleOverlap);
+					TraceDist = SweepDistance + ShrinkHeight;
+					CapsuleShape.Capsule.HalfHeight = FMath::Max(PawnHalfHeight - ShrinkHeight, CapsuleShape.Capsule.Radius);
+					Hit.Reset(1.f, false);
+
+					bBlockingHit = FloorSweepTest(Hit, CapsuleLocation, CapsuleLocation + RotateGravityToWorld(FVector(0.f,0.f,-TraceDist)), CollisionChannel, CapsuleShape, QueryParams, ResponseParam);
+				}
+			}
+
+			// Reduce hit distance by ShrinkHeight because we shrank the capsule for the trace.
+			// We allow negative distances here, because this allows us to pull out of penetrations.
+			const float MaxPenetrationAdjust = FMath::Max(MAX_FLOOR_DIST, PawnRadius);
+			const float SweepResult = FMath::Max(-MaxPenetrationAdjust, Hit.Time * TraceDist - ShrinkHeight);
+
+			OutFloorResult.SetFromSweep(Hit, SweepResult, false);
+			if (Hit.IsValidBlockingHit() && IsWalkable(Hit))
+			{
+				if (SweepResult <= SweepDistance)
+				{
+					// Hit within test distance.
+					OutFloorResult.bWalkableFloor = true;
+					return;
+				}
+			}
+		}
+	}
+
+	// Since we require a longer sweep than line trace, we don't want to run the line trace if the sweep missed everything.
+	// We do however want to try a line trace if the sweep was stuck in penetration.
+	if (!OutFloorResult.bBlockingHit && !OutFloorResult.HitResult.bStartPenetrating)
+	{
+		OutFloorResult.FloorDist = SweepDistance;
+		return;
+	}
+
+	// Line trace
+	if (LineDistance > 0.f)
+	{
+		const float ShrinkHeight = PawnHalfHeight;
+		const FVector LineTraceStart = CapsuleLocation;
+		const float TraceDist = LineDistance + ShrinkHeight;
+		const FVector Down = RotateGravityToWorld(FVector(0.f, 0.f, -TraceDist));
+		QueryParams.TraceTag = SCENE_QUERY_STAT_NAME_ONLY(FloorLineTrace);
+
+		FHitResult Hit(1.f);
+		bBlockingHit = GetWorld()->LineTraceSingleByChannel(Hit, LineTraceStart, LineTraceStart + Down, CollisionChannel, QueryParams, ResponseParam);
+
+		if (bBlockingHit)
+		{
+			if (Hit.Time > 0.f)
+			{
+				// Reduce hit distance by ShrinkHeight because we started the trace higher than the base.
+				// We allow negative distances here, because this allows us to pull out of penetrations.
+				const float MaxPenetrationAdjust = FMath::Max(MAX_FLOOR_DIST, PawnRadius);
+				const float LineResult = FMath::Max(-MaxPenetrationAdjust, Hit.Time * TraceDist - ShrinkHeight);
+
+				OutFloorResult.bBlockingHit = true;
+				if (LineResult <= LineDistance && IsWalkable(Hit))
+				{
+					OutFloorResult.SetFromLineTrace(Hit, OutFloorResult.FloorDist, LineResult, true);
+					return;
+				}
+			}
+		}
+	}
+
+	// No hits were acceptable.
+	OutFloorResult.bWalkableFloor = false;
+
+	// ReSharper restore All
+}
+
 void UAlsCharacterMovementComponent::PerformMovement(const float DeltaTime)
 {
 	Super::PerformMovement(DeltaTime);
@@ -547,22 +806,23 @@ FNetworkPredictionData_Client* UAlsCharacterMovementComponent::GetPredictionData
 
 void UAlsCharacterMovementComponent::SmoothClientPosition(const float DeltaTime)
 {
-	auto* Mesh{HasValidData() ? CharacterOwner->GetMesh() : nullptr};
+	auto* PredictionData{GetPredictionData_Client_Character()};
+	const auto* Mesh{HasValidData() ? CharacterOwner->GetMesh() : nullptr};
 
-	if (NetworkSmoothingMode == ENetworkSmoothingMode::Disabled || !IsValid(Mesh) ||
-	    !Mesh->IsUsingAbsoluteRotation() || Mesh->IsSimulatingPhysics())
+	if (PredictionData != nullptr && IsValid(Mesh) && Mesh->IsUsingAbsoluteRotation())
 	{
-		Super::SmoothClientPosition(DeltaTime);
-		return;
+		// Calling Super::SmoothClientPosition() will change the mesh's rotation, which is undesirable when using
+		// absolute mesh rotation since we're manually updating the mesh's rotation from the animation instance. So,
+		// to keep the rotation unchanged, we simply override the predicted rotations with the mesh's current rotation.
+
+		const auto Rotation{Mesh->GetComponentQuat() * CharacterOwner->GetBaseRotationOffset().Inverse()};
+
+		PredictionData->OriginalMeshRotationOffset = Rotation;
+		PredictionData->MeshRotationOffset = Rotation;
+		PredictionData->MeshRotationTarget = Rotation;
 	}
 
-	// Ignore mesh rotation smoothing when using absolute mesh rotation because in this case ALS controls the mesh rotation itself.
-
-	const auto InitialRotation{Mesh->GetComponentQuat()};
-
 	Super::SmoothClientPosition(DeltaTime);
-
-	Mesh->SetWorldRotation(InitialRotation);
 }
 
 void UAlsCharacterMovementComponent::MoveAutonomous(const float ClientTimeStamp, const float DeltaTime,
@@ -591,164 +851,11 @@ void UAlsCharacterMovementComponent::MoveAutonomous(const float ClientTimeStamp,
 		auto* Character{Cast<AAlsCharacter>(CharacterOwner)};
 		if (IsValid(Character))
 		{
-			Character->CorrectViewNetworkSmoothing(NewControlRotation);
+			Character->CorrectViewNetworkSmoothing(NewControlRotation, false);
 		}
 
 		PreviousControlRotation = NewControlRotation;
 	}
-}
-
-void UAlsCharacterMovementComponent::ComputeFloorDist(const FVector& CapsuleLocation, float LineDistance, float SweepDistance,
-                                                      FFindFloorResult& OutFloorResult, float SweepRadius,
-                                                      const FHitResult* DownwardSweepResult) const
-{
-	// TODO Copied with modifications from UCharacterMovementComponent::ComputeFloorDist().
-	// TODO After the release of a new engine version, this code should be updated to match the source code.
-
-	// ReSharper disable All
-
-	// UE_LOG(LogCharacterMovement, VeryVerbose, TEXT("[Role:%d] ComputeFloorDist: %s at location %s"), (int32)CharacterOwner->GetLocalRole(), *GetNameSafe(CharacterOwner), *CapsuleLocation.ToString());
-	OutFloorResult.Clear();
-
-	float PawnRadius, PawnHalfHeight;
-	CharacterOwner->GetCapsuleComponent()->GetScaledCapsuleSize(PawnRadius, PawnHalfHeight);
-
-	bool bSkipSweep = false;
-	if (DownwardSweepResult != NULL && DownwardSweepResult->IsValidBlockingHit())
-	{
-		// Only if the supplied sweep was vertical and downward.
-		if ((DownwardSweepResult->TraceStart.Z > DownwardSweepResult->TraceEnd.Z) &&
-			(DownwardSweepResult->TraceStart - DownwardSweepResult->TraceEnd).SizeSquared2D() <= KINDA_SMALL_NUMBER)
-		{
-			// Reject hits that are barely on the cusp of the radius of the capsule
-			if (IsWithinEdgeTolerance(DownwardSweepResult->Location, DownwardSweepResult->ImpactPoint, PawnRadius))
-			{
-				// Don't try a redundant sweep, regardless of whether this sweep is usable.
-				bSkipSweep = true;
-
-				const bool bIsWalkable = IsWalkable(*DownwardSweepResult);
-				const float FloorDist = (CapsuleLocation.Z - DownwardSweepResult->Location.Z);
-				OutFloorResult.SetFromSweep(*DownwardSweepResult, FloorDist, bIsWalkable);
-
-				if (bIsWalkable)
-				{
-					// Use the supplied downward sweep as the floor hit result.
-					return;
-				}
-			}
-		}
-	}
-
-	// We require the sweep distance to be >= the line distance, otherwise the HitResult can't be interpreted as the sweep result.
-	if (SweepDistance < LineDistance)
-	{
-		ensure(SweepDistance >= LineDistance);
-		return;
-	}
-
-	bool bBlockingHit = false;
-	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(ComputeFloorDist), false, CharacterOwner);
-	FCollisionResponseParams ResponseParam;
-	InitCollisionParams(QueryParams, ResponseParam);
-	const ECollisionChannel CollisionChannel = UpdatedComponent->GetCollisionObjectType();
-
-	// Sweep test
-	if (!bSkipSweep && SweepDistance > 0.f && SweepRadius > 0.f)
-	{
-		// Use a shorter height to avoid sweeps giving weird results if we start on a surface.
-		// This also allows us to adjust out of penetrations.
-		const float ShrinkScale = 0.9f;
-		const float ShrinkScaleOverlap = 0.1f;
-		float ShrinkHeight = (PawnHalfHeight - PawnRadius) * (1.f - ShrinkScale);
-		float TraceDist = SweepDistance + ShrinkHeight;
-		FCollisionShape CapsuleShape = FCollisionShape::MakeCapsule(SweepRadius, PawnHalfHeight - ShrinkHeight);
-
-		FHitResult Hit(1.f);
-		bBlockingHit = FloorSweepTest(Hit, CapsuleLocation, CapsuleLocation + FVector(0.f,0.f,-TraceDist), CollisionChannel, CapsuleShape, QueryParams, ResponseParam);
-
-		const_cast<ThisClass*>(this)->SavePenetrationAdjustment(Hit);
-
-		if (bBlockingHit)
-		{
-			// Reject hits adjacent to us, we only care about hits on the bottom portion of our capsule.
-			// Check 2D distance to impact point, reject if within a tolerance from radius.
-			if (Hit.bStartPenetrating || !IsWithinEdgeTolerance(CapsuleLocation, Hit.ImpactPoint, CapsuleShape.Capsule.Radius))
-			{
-				// Use a capsule with a slightly smaller radius and shorter height to avoid the adjacent object.
-				// Capsule must not be nearly zero or the trace will fall back to a line trace from the start point and have the wrong length.
-				CapsuleShape.Capsule.Radius = FMath::Max(0.f, CapsuleShape.Capsule.Radius - SWEEP_EDGE_REJECT_DISTANCE - KINDA_SMALL_NUMBER);
-				if (!CapsuleShape.IsNearlyZero())
-				{
-					ShrinkHeight = (PawnHalfHeight - PawnRadius) * (1.f - ShrinkScaleOverlap);
-					TraceDist = SweepDistance + ShrinkHeight;
-					CapsuleShape.Capsule.HalfHeight = FMath::Max(PawnHalfHeight - ShrinkHeight, CapsuleShape.Capsule.Radius);
-					Hit.Reset(1.f, false);
-
-					bBlockingHit = FloorSweepTest(Hit, CapsuleLocation, CapsuleLocation + FVector(0.f,0.f,-TraceDist), CollisionChannel, CapsuleShape, QueryParams, ResponseParam);
-				}
-			}
-
-			// Reduce hit distance by ShrinkHeight because we shrank the capsule for the trace.
-			// We allow negative distances here, because this allows us to pull out of penetrations.
-			const float MaxPenetrationAdjust = FMath::Max(MAX_FLOOR_DIST, PawnRadius);
-			const float SweepResult = FMath::Max(-MaxPenetrationAdjust, Hit.Time * TraceDist - ShrinkHeight);
-
-			OutFloorResult.SetFromSweep(Hit, SweepResult, false);
-			if (Hit.IsValidBlockingHit() && IsWalkable(Hit))
-			{
-				if (SweepResult <= SweepDistance)
-				{
-					// Hit within test distance.
-					OutFloorResult.bWalkableFloor = true;
-					return;
-				}
-			}
-		}
-	}
-
-	// Since we require a longer sweep than line trace, we don't want to run the line trace if the sweep missed everything.
-	// We do however want to try a line trace if the sweep was stuck in penetration.
-	if (!OutFloorResult.bBlockingHit && !OutFloorResult.HitResult.bStartPenetrating)
-	{
-		OutFloorResult.FloorDist = SweepDistance;
-		return;
-	}
-
-	// Line trace
-	if (LineDistance > 0.f)
-	{
-		const float ShrinkHeight = PawnHalfHeight;
-		const FVector LineTraceStart = CapsuleLocation;
-		const float TraceDist = LineDistance + ShrinkHeight;
-		const FVector Down = FVector(0.f, 0.f, -TraceDist);
-		QueryParams.TraceTag = SCENE_QUERY_STAT_NAME_ONLY(FloorLineTrace);
-
-		FHitResult Hit(1.f);
-		bBlockingHit = GetWorld()->LineTraceSingleByChannel(Hit, LineTraceStart, LineTraceStart + Down, CollisionChannel, QueryParams, ResponseParam);
-
-		if (bBlockingHit)
-		{
-			if (Hit.Time > 0.f)
-			{
-				// Reduce hit distance by ShrinkHeight because we started the trace higher than the base.
-				// We allow negative distances here, because this allows us to pull out of penetrations.
-				const float MaxPenetrationAdjust = FMath::Max(MAX_FLOOR_DIST, PawnRadius);
-				const float LineResult = FMath::Max(-MaxPenetrationAdjust, Hit.Time * TraceDist - ShrinkHeight);
-
-				OutFloorResult.bBlockingHit = true;
-				if (LineResult <= LineDistance && IsWalkable(Hit))
-				{
-					OutFloorResult.SetFromLineTrace(Hit, OutFloorResult.FloorDist, LineResult, true);
-					return;
-				}
-			}
-		}
-	}
-
-	// No hits were acceptable.
-	OutFloorResult.bWalkableFloor = false;
-
-	// ReSharper restore All
 }
 
 void UAlsCharacterMovementComponent::SavePenetrationAdjustment(const FHitResult& Hit)
@@ -785,37 +892,40 @@ void UAlsCharacterMovementComponent::RefreshGaitSettings()
 {
 	if (ALS_ENSURE(IsValid(MovementSettings)))
 	{
-		GaitSettings = *MovementSettings->RotationModes.Find(RotationMode)->Stances.Find(Stance);
+		const auto* StanceSettings{MovementSettings->RotationModes.Find(RotationMode)};
+		const auto* NewGaitSettings{ALS_ENSURE(StanceSettings != nullptr) ? StanceSettings->Stances.Find(Stance) : nullptr};
+
+		GaitSettings = ALS_ENSURE(NewGaitSettings != nullptr) ? *NewGaitSettings : FAlsMovementGaitSettings{};
 	}
 
 	RefreshMaxWalkSpeed();
 }
 
-void UAlsCharacterMovementComponent::SetRotationMode(const FGameplayTag& NewModeTag)
+void UAlsCharacterMovementComponent::SetRotationMode(const FGameplayTag& NewRotationMode)
 {
-	if (RotationMode != NewModeTag)
+	if (RotationMode != NewRotationMode)
 	{
-		RotationMode = NewModeTag;
+		RotationMode = NewRotationMode;
 
 		RefreshGaitSettings();
 	}
 }
 
-void UAlsCharacterMovementComponent::SetStance(const FGameplayTag& NewStanceTag)
+void UAlsCharacterMovementComponent::SetStance(const FGameplayTag& NewStance)
 {
-	if (Stance != NewStanceTag)
+	if (Stance != NewStance)
 	{
-		Stance = NewStanceTag;
+		Stance = NewStance;
 
 		RefreshGaitSettings();
 	}
 }
 
-void UAlsCharacterMovementComponent::SetMaxAllowedGait(const FGameplayTag& NewGaitTag)
+void UAlsCharacterMovementComponent::SetMaxAllowedGait(const FGameplayTag& NewMaxAllowedGait)
 {
-	if (MaxAllowedGait != NewGaitTag)
+	if (MaxAllowedGait != NewMaxAllowedGait)
 	{
-		MaxAllowedGait = NewGaitTag;
+		MaxAllowedGait = NewMaxAllowedGait;
 
 		RefreshMaxWalkSpeed();
 	}
@@ -823,7 +933,7 @@ void UAlsCharacterMovementComponent::SetMaxAllowedGait(const FGameplayTag& NewGa
 
 void UAlsCharacterMovementComponent::RefreshMaxWalkSpeed()
 {
-	MaxWalkSpeed = GaitSettings.GetSpeedForGait(MaxAllowedGait);
+	MaxWalkSpeed = GaitSettings.GetSpeedByGait(MaxAllowedGait);
 	MaxWalkSpeedCrouched = MaxWalkSpeed;
 }
 
@@ -857,4 +967,25 @@ float UAlsCharacterMovementComponent::CalculateGaitAmount() const
 void UAlsCharacterMovementComponent::SetMovementModeLocked(const bool bNewMovementModeLocked)
 {
 	bMovementModeLocked = bNewMovementModeLocked;
+}
+
+void UAlsCharacterMovementComponent::SetInputBlocked(const bool bNewInputBlocked)
+{
+	bInputBlocked = bNewInputBlocked;
+}
+
+bool UAlsCharacterMovementComponent::TryConsumePrePenetrationAdjustmentVelocity(FVector& OutVelocity)
+{
+	if (!bPrePenetrationAdjustmentVelocityValid)
+	{
+		OutVelocity = FVector::ZeroVector;
+		return false;
+	}
+
+	OutVelocity = PrePenetrationAdjustmentVelocity;
+
+	PrePenetrationAdjustmentVelocity = FVector::ZeroVector;
+	bPrePenetrationAdjustmentVelocityValid = false;
+
+	return true;
 }

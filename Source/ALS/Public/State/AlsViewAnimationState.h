@@ -3,30 +3,12 @@
 #include "AlsViewAnimationState.generated.h"
 
 USTRUCT(BlueprintType)
-struct ALS_API FAlsLookTowardsInputState
+struct ALS_API FAlsLookState
 {
 	GENERATED_BODY()
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
-	bool bReinitializationRequired{true};
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS", Meta = (ClampMin = -180, ClampMax = 180, ForceUnits = "deg"))
-	float WorldYawAngle{0.0f};
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS", Meta = (ClampMin = -180, ClampMax = 180, ForceUnits = "deg"))
-	float YawAngle{0.0f};
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS", Meta = (ClampMin = 0, ClampMax = 1))
-	float YawAmount{0.5f};
-};
-
-USTRUCT(BlueprintType)
-struct ALS_API FAlsLookTowardsCameraState
-{
-	GENERATED_BODY()
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
-	bool bReinitializationRequired{true};
+	uint8 bReinitializationRequired : 1 {true};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS", Meta = (ClampMin = -180, ClampMax = 180, ForceUnits = "deg"))
 	float WorldYawAngle{0.0f};
@@ -53,13 +35,13 @@ struct ALS_API FAlsSpineRotationState
 	GENERATED_BODY()
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
-	bool bSpineRotationAllowed{false};
+	uint8 bSpineRotationAllowed : 1 {false};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS", Meta = (ClampMin = 0, ClampMax = 1))
 	float SpineAmount{0.0f};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS", Meta = (ClampMin = -180, ClampMax = 180, ForceUnits = "deg"))
-	float StartYawAngle{0.0f};
+	float InitialYawAngle{0.0f};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS", Meta = (ClampMin = -180, ClampMax = 180, ForceUnits = "deg"))
 	float TargetYawAngle{0.0f};
@@ -98,8 +80,5 @@ struct ALS_API FAlsViewAnimationState
 	FAlsSpineRotationState SpineRotation;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
-	FAlsLookTowardsInputState LookTowardsInput;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
-	FAlsLookTowardsCameraState LookTowardsCamera;
+	FAlsLookState Look;
 };

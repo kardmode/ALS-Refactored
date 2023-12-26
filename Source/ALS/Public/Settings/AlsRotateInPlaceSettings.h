@@ -11,19 +11,19 @@ struct ALS_API FAlsRotateInPlaceSettings
 	float ViewYawAngleThreshold{50.0f};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS", Meta = (ClampMin = 0))
-	FVector2D ReferenceViewYawSpeed{180.0f, 460.0f};
+	FVector2f ReferenceViewYawSpeed{180.0f, 460.0f};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS", Meta = (ClampMin = 0))
-	FVector2D PlayRate{1.15f, 3.0f};
+	FVector2f PlayRate{1.15f, 3.0f};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
-	bool bDisableFootLock{false};
+	uint8 bDisableFootLock : 1 {false};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS",
 		Meta = (ClampMin = 0, ClampMax = 180, EditCondition = "!bDisableFootLock", ForceUnits = "deg"))
-	float FootLockBlockViewYawAngleThreshold{120.0f};
+	float FootLockInhibitionViewYawAngleThreshold{120.0f};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS",
 		Meta = (ClampMin = 0, EditCondition = "!bDisableFootLock", ForceUnits = "deg/s"))
-	float FootLockBlockViewYawSpeedThreshold{620.0f};
+	float FootLockInhibitionViewYawSpeedThreshold{620.0f};
 };

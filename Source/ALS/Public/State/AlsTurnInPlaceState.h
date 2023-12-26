@@ -9,7 +9,7 @@ struct ALS_API FAlsTurnInPlaceState
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS", Meta = (ForceUnits = "s"))
 	float ActivationDelay{0.0f};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
@@ -25,5 +25,5 @@ struct ALS_API FAlsTurnInPlaceState
 	float PlayRate{1.0f};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
-	bool bFootLockDisabled{false};
+	uint8 bFootLockInhibited : 1 {false};
 };

@@ -13,9 +13,9 @@ protected:
 	TSoftObjectPtr<UAnimSequence> SourceSequence;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Settings")
-	bool bCopyAllCurves{true};
+	uint8 bCopyAllCurves : 1 {true};
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Settings", Meta = (AEditCondition = "!bCopyAllCurves"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Settings", Meta = (EditCondition = "!bCopyAllCurves"))
 	TArray<FName> CurveNames;
 
 public:

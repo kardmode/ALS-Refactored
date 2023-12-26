@@ -2,7 +2,6 @@
 
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Settings/AlsMovementSettings.h"
-#include "Utility/AlsGameplayTags.h"
 #include "AlsCharacterMovementComponent.generated.h"
 
 using FAlsPhysicsRotationDelegate = TMulticastDelegate<void(float DeltaTime)>;
@@ -13,7 +12,7 @@ private:
 	using Super = FCharacterNetworkMoveData;
 
 public:
-	FGameplayTag RotationMode{AlsRotationModeTags::LookingDirection};
+	FGameplayTag RotationMode{AlsRotationModeTags::ViewDirection};
 
 	FGameplayTag Stance{AlsStanceTags::Standing};
 
@@ -40,7 +39,7 @@ private:
 	using Super = FSavedMove_Character;
 
 public:
-	FGameplayTag RotationMode{AlsRotationModeTags::LookingDirection};
+	FGameplayTag RotationMode{AlsRotationModeTags::ViewDirection};
 
 	FGameplayTag Stance{AlsStanceTags::Standing};
 
@@ -88,7 +87,7 @@ protected:
 	FAlsMovementGaitSettings GaitSettings;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient)
-	FGameplayTag RotationMode{AlsRotationModeTags::LookingDirection};
+	FGameplayTag RotationMode{AlsRotationModeTags::ViewDirection};
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient)
 	FGameplayTag Stance{AlsStanceTags::Standing};
@@ -97,7 +96,11 @@ protected:
 	FGameplayTag MaxAllowedGait{AlsGaitTags::Walking};
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient)
-	bool bMovementModeLocked;
+	uint8 bMovementModeLocked : 1;
+
+	// Used to temporarily prohibit the player from moving the character. Also works for AI-controlled characters.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient)
+	uint8 bInputBlocked : 1;
 
 	// Valid only on locally controlled characters.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient)
@@ -105,6 +108,12 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient)
 	FVector PendingPenetrationAdjustment;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient)
+	FVector PrePenetrationAdjustmentVelocity;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient)
+	uint8 bPrePenetrationAdjustmentVelocityValid : 1;
 
 public:
 	FAlsPhysicsRotationDelegate OnPhysicsRotation;
@@ -121,6 +130,15 @@ public:
 	virtual void SetMovementMode(EMovementMode NewMovementMode, uint8 NewCustomMode = 0) override;
 
 	virtual void OnMovementModeChanged(EMovementMode PreviousMovementMode, uint8 PreviousCustomMode) override;
+
+	virtual bool ShouldPerformAirControlForPathFollowing() const override;
+
+	virtual void UpdateBasedRotation(FRotator& FinalRotation, const FRotator& ReducedRotation) override;
+
+	virtual bool ApplyRequestedMove(float DeltaTime, float CurrentMaxAcceleration, float MaxSpeed, float Friction,
+	                                float BrakingDeceleration, FVector& RequestedAcceleration, float& RequestedSpeed) override;
+
+	virtual void CalcVelocity(float DeltaTime, float Friction, bool bFluid, float BrakingDeceleration) override;
 
 	virtual float GetMaxAcceleration() const override;
 
@@ -139,6 +157,13 @@ protected:
 
 	virtual void PhysCustom(float DeltaTime, int32 Iterations) override;
 
+	virtual FVector ConsumeInputVector() override;
+
+public:
+	virtual void ComputeFloorDist(const FVector& CapsuleLocation, float LineDistance, float SweepDistance, FFindFloorResult& OutFloorResult,
+	                              float SweepRadius, const FHitResult* DownwardSweepResult) const override;
+
+protected:
 	virtual void PerformMovement(float DeltaTime) override;
 
 public:
@@ -149,16 +174,13 @@ protected:
 
 	virtual void MoveAutonomous(float ClientTimeStamp, float DeltaTime, uint8 CompressedFlags, const FVector& NewAcceleration) override;
 
-	virtual void ComputeFloorDist(const FVector& CapsuleLocation, float LineDistance, float SweepDistance, FFindFloorResult& OutFloorResult,
-	                              float SweepRadius, const FHitResult* DownwardSweepResult) const override;
-
 private:
 	void SavePenetrationAdjustment(const FHitResult& Hit);
 
 	void ApplyPendingPenetrationAdjustment();
 
 public:
-	UFUNCTION(BlueprintCallable, Category = "ALS|Als Character Movement")
+	UFUNCTION(BlueprintCallable, Category = "ALS|Character Movement")
 	void SetMovementSettings(UAlsMovementSettings* NewMovementSettings);
 
 	const FAlsMovementGaitSettings& GetGaitSettings() const;
@@ -167,11 +189,11 @@ private:
 	void RefreshGaitSettings();
 
 public:
-	void SetRotationMode(const FGameplayTag& NewModeTag);
+	void SetRotationMode(const FGameplayTag& NewRotationMode);
 
-	void SetStance(const FGameplayTag& NewStanceTag);
+	void SetStance(const FGameplayTag& NewStance);
 
-	void SetMaxAllowedGait(const FGameplayTag& NewGaitTag);
+	void SetMaxAllowedGait(const FGameplayTag& NewMaxAllowedGait);
 
 private:
 	void RefreshMaxWalkSpeed();
@@ -180,6 +202,10 @@ public:
 	float CalculateGaitAmount() const;
 
 	void SetMovementModeLocked(bool bNewMovementModeLocked);
+
+	void SetInputBlocked(bool bNewInputBlocked);
+
+	bool TryConsumePrePenetrationAdjustmentVelocity(FVector& OutVelocity);
 };
 
 inline const FAlsMovementGaitSettings& UAlsCharacterMovementComponent::GetGaitSettings() const

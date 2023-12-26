@@ -17,7 +17,7 @@ public:
 	float PlayRate{1.2f};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings")
-	bool bScalePlayRateByAnimatedTurnAngle{true};
+	uint8 bScalePlayRateByAnimatedTurnAngle : 1 {true};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings", Meta = (ClampMin = 0, ClampMax = 180, ForceUnits = "deg"))
 	float AnimatedTurnAngle;
@@ -35,17 +35,17 @@ struct ALS_API FAlsGeneralTurnInPlaceSettings
 	float ViewYawSpeedThreshold{50.0f};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS", Meta = (ClampMin = 0))
-	FVector2D ViewYawAngleToActivationDelay{0.0f, 0.75f};
+	FVector2f ViewYawAngleToActivationDelay{0.0f, 0.75f};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS", DisplayName = "Turn 180 Angle Threshold",
 		Meta = (ClampMin = 0, ClampMax = 180, ForceUnits = "deg"))
 	float Turn180AngleThreshold{130.0f};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS", Meta = (ClampMin = 0, ForceUnits = "s"))
-	float BlendTime{0.2f};
+	float BlendDuration{0.2f};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS")
-	bool bDisableFootLock{false};
+	uint8 bDisableFootLock : 1 {false};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ALS", Instanced, DisplayName = "Standing Turn 90 Left")
 	TObjectPtr<UAlsTurnInPlaceSettings> StandingTurn90Left{nullptr};

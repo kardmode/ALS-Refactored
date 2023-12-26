@@ -3,6 +3,8 @@
 #include "Animation/AnimSequence.h"
 #include "Utility/AlsMacros.h"
 
+#include UE_INLINE_GENERATED_CPP_BY_NAME(AlsAnimationModifier_CopyCurves)
+
 void UAlsAnimationModifier_CopyCurves::OnApply_Implementation(UAnimSequence* Sequence)
 {
 	Super::OnApply_Implementation(Sequence);
@@ -17,7 +19,7 @@ void UAlsAnimationModifier_CopyCurves::OnApply_Implementation(UAnimSequence* Seq
 	{
 		for (const auto& Curve : SourceSequenceObject->GetCurveData().FloatCurves)
 		{
-			CopyCurve(SourceSequenceObject, Sequence, Curve.Name.DisplayName);
+			CopyCurve(SourceSequenceObject, Sequence, Curve.GetName());
 		}
 	}
 	else
@@ -34,12 +36,6 @@ void UAlsAnimationModifier_CopyCurves::OnApply_Implementation(UAnimSequence* Seq
 
 void UAlsAnimationModifier_CopyCurves::CopyCurve(UAnimSequence* SourceSequence, UAnimSequence* TargetSequence, const FName& CurveName)
 {
-	static TArray<float> CurveTimes;
-	check(CurveTimes.IsEmpty())
-
-	static TArray<float> CurveValues;
-	check(CurveValues.IsEmpty())
-
 	if (UAnimationBlueprintLibrary::DoesCurveExist(TargetSequence, CurveName, ERawCurveTrackTypes::RCT_Float))
 	{
 		UAnimationBlueprintLibrary::RemoveCurve(TargetSequence, CurveName);
@@ -47,9 +43,9 @@ void UAlsAnimationModifier_CopyCurves::CopyCurve(UAnimSequence* SourceSequence, 
 
 	UAnimationBlueprintLibrary::AddCurve(TargetSequence, CurveName);
 
+	TArray<float> CurveTimes;
+	TArray<float> CurveValues;
+
 	UAnimationBlueprintLibrary::GetFloatKeys(SourceSequence, CurveName, CurveTimes, CurveValues);
 	UAnimationBlueprintLibrary::AddFloatCurveKeys(TargetSequence, CurveName, CurveTimes, CurveValues);
-
-	CurveTimes.Reset();
-	CurveValues.Reset();
 }
