@@ -8,10 +8,16 @@ public class ALSCamera : ModuleRules
 		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_3;
 
 		bEnableNonInlinedGenCppWarnings = true;
+		// UnsafeTypeCastWarningLevel = WarningLevel.Warning;
+
+		PublicDependencyModuleNames.AddRange(new[]
+		{
+			"Core", "CoreUObject", "Engine", "GameplayTags", "ALS"
+		});
 
 		PrivateDependencyModuleNames.AddRange(new[]
 		{
-			"Core", "CoreUObject", "Engine", "EngineSettings", "GameplayTags", "ALS"
+			"EngineSettings"
 		});
 	}
 }

@@ -17,18 +17,18 @@ UAlsAnimNotify_SetGroundedEntryMode::UAlsAnimNotify_SetGroundedEntryMode()
 
 FString UAlsAnimNotify_SetGroundedEntryMode::GetNotifyName_Implementation() const
 {
-	TStringBuilder<256> NotifyNameBuilder;
-
-	NotifyNameBuilder << TEXTVIEW("Als Set Grounded Entry Mode: ")
-		<< FName::NameToDisplayString(UAlsUtility::GetSimpleTagName(GroundedEntryMode).ToString(), false);
+	TStringBuilder<256> NotifyNameBuilder{
+		InPlace, TEXTVIEW("Als Set Grounded Entry Mode: "),
+		FName::NameToDisplayString(UAlsUtility::GetSimpleTagName(GroundedEntryMode).ToString(), false)
+	};
 
 	return FString{NotifyNameBuilder};
 }
 
-void UAlsAnimNotify_SetGroundedEntryMode::Notify(USkeletalMeshComponent* Mesh, UAnimSequenceBase* Animation,
-                                                 const FAnimNotifyEventReference& EventReference)
+void UAlsAnimNotify_SetGroundedEntryMode::Notify(USkeletalMeshComponent* Mesh, UAnimSequenceBase* Sequence,
+                                                 const FAnimNotifyEventReference& NotifyEventReference)
 {
-	Super::Notify(Mesh, Animation, EventReference);
+	Super::Notify(Mesh, Sequence, NotifyEventReference);
 
 	auto* AnimationInstance{Cast<UAlsAnimationInstance>(Mesh->GetAnimInstance())};
 	if (IsValid(AnimationInstance))

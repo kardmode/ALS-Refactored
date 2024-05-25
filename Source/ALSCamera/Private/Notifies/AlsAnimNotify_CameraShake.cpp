@@ -16,9 +16,7 @@ UAlsAnimNotify_CameraShake::UAlsAnimNotify_CameraShake()
 
 FString UAlsAnimNotify_CameraShake::GetNotifyName_Implementation() const
 {
-	TStringBuilder<256> NotifyNameBuilder;
-
-	NotifyNameBuilder << TEXTVIEW("Als Camera Shake: ");
+	TStringBuilder<256> NotifyNameBuilder{InPlace, TEXTVIEW("Als Camera Shake: ")};
 
 	if (IsValid(CameraShakeClass))
 	{
@@ -28,10 +26,19 @@ FString UAlsAnimNotify_CameraShake::GetNotifyName_Implementation() const
 	return FString{NotifyNameBuilder};
 }
 
-void UAlsAnimNotify_CameraShake::Notify(USkeletalMeshComponent* Mesh, UAnimSequenceBase* Animation,
-                                        const FAnimNotifyEventReference& EventReference)
+#if WITH_EDITOR
+void UAlsAnimNotify_CameraShake::OnAnimNotifyCreatedInEditor(FAnimNotifyEvent& NotifyEvent)
 {
-	Super::Notify(Mesh, Animation, EventReference);
+	Super::OnAnimNotifyCreatedInEditor(NotifyEvent);
+
+	NotifyEvent.bTriggerOnDedicatedServer = false;
+}
+#endif
+
+void UAlsAnimNotify_CameraShake::Notify(USkeletalMeshComponent* Mesh, UAnimSequenceBase* Sequence,
+                                        const FAnimNotifyEventReference& NotifyEventReference)
+{
+	Super::Notify(Mesh, Sequence, NotifyEventReference);
 
 	const auto* Pawn{Cast<APawn>(Mesh->GetOwner())};
 	const auto* Player{IsValid(Pawn) ? Cast<APlayerController>(Pawn->GetController()) : nullptr};

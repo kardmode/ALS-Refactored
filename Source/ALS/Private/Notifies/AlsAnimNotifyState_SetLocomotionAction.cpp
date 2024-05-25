@@ -13,18 +13,18 @@ UAlsAnimNotifyState_SetLocomotionAction::UAlsAnimNotifyState_SetLocomotionAction
 
 FString UAlsAnimNotifyState_SetLocomotionAction::GetNotifyName_Implementation() const
 {
-	TStringBuilder<256> NotifyNameBuilder;
-
-	NotifyNameBuilder << TEXTVIEW("Als Set Locomotion Action: ")
-		<< FName::NameToDisplayString(UAlsUtility::GetSimpleTagName(LocomotionAction).ToString(), false);
+	TStringBuilder<256> NotifyNameBuilder{
+		InPlace, TEXTVIEW("Als Set Locomotion Action: "),
+		FName::NameToDisplayString(UAlsUtility::GetSimpleTagName(LocomotionAction).ToString(), false)
+	};
 
 	return FString{NotifyNameBuilder};
 }
 
-void UAlsAnimNotifyState_SetLocomotionAction::NotifyBegin(USkeletalMeshComponent* Mesh, UAnimSequenceBase* Animation,
-                                                          const float Duration, const FAnimNotifyEventReference& EventReference)
+void UAlsAnimNotifyState_SetLocomotionAction::NotifyBegin(USkeletalMeshComponent* Mesh, UAnimSequenceBase* Sequence,
+                                                          const float Duration, const FAnimNotifyEventReference& NotifyEventReference)
 {
-	Super::NotifyBegin(Mesh, Animation, Duration, EventReference);
+	Super::NotifyBegin(Mesh, Sequence, Duration, NotifyEventReference);
 
 	auto* Character{Cast<AAlsCharacter>(Mesh->GetOwner())};
 	if (IsValid(Character))
@@ -33,10 +33,10 @@ void UAlsAnimNotifyState_SetLocomotionAction::NotifyBegin(USkeletalMeshComponent
 	}
 }
 
-void UAlsAnimNotifyState_SetLocomotionAction::NotifyEnd(USkeletalMeshComponent* Mesh, UAnimSequenceBase* Animation,
-                                                        const FAnimNotifyEventReference& EventReference)
+void UAlsAnimNotifyState_SetLocomotionAction::NotifyEnd(USkeletalMeshComponent* Mesh, UAnimSequenceBase* Sequence,
+                                                        const FAnimNotifyEventReference& NotifyEventReference)
 {
-	Super::NotifyEnd(Mesh, Animation, EventReference);
+	Super::NotifyEnd(Mesh, Sequence, NotifyEventReference);
 
 	auto* Character{Cast<AAlsCharacter>(Mesh->GetOwner())};
 

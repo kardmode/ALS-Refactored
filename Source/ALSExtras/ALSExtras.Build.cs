@@ -8,10 +8,16 @@ public class ALSExtras : ModuleRules
 		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_3;
 
 		bEnableNonInlinedGenCppWarnings = true;
+		// UnsafeTypeCastWarningLevel = WarningLevel.Warning;
+
+		PublicDependencyModuleNames.AddRange(new[]
+		{
+			"Core", "CoreUObject", "Engine", "AIModule", "ALS"
+		});
 
 		PrivateDependencyModuleNames.AddRange(new[]
 		{
-			"Core", "CoreUObject", "Engine", "EnhancedInput", "GameplayTags", "AIModule", "ALS", "ALSCamera"
+			"EnhancedInput", "ALSCamera"
 		});
 	}
 }

@@ -17,18 +17,17 @@ UAlsAnimNotifyState_SetRootMotionScale::UAlsAnimNotifyState_SetRootMotionScale()
 
 FString UAlsAnimNotifyState_SetRootMotionScale::GetNotifyName_Implementation() const
 {
-	TStringBuilder<64> NotifyNameBuilder;
+	TStringBuilder<64> NotifyNameBuilder{InPlace, TEXTVIEW("Als Set Root Motion Scale: ")};
 
-	NotifyNameBuilder << TEXTVIEW("Als Set Root Motion Scale: ");
 	NotifyNameBuilder.Appendf(TEXT("%.2f"), TranslationScale);
 
 	return FString{NotifyNameBuilder};
 }
 
-void UAlsAnimNotifyState_SetRootMotionScale::NotifyBegin(USkeletalMeshComponent* Mesh, UAnimSequenceBase* Animation,
-                                                         const float Duration, const FAnimNotifyEventReference& EventReference)
+void UAlsAnimNotifyState_SetRootMotionScale::NotifyBegin(USkeletalMeshComponent* Mesh, UAnimSequenceBase* Sequence,
+                                                         const float Duration, const FAnimNotifyEventReference& NotifyEventReference)
 {
-	Super::NotifyBegin(Mesh, Animation, Duration, EventReference);
+	Super::NotifyBegin(Mesh, Sequence, Duration, NotifyEventReference);
 
 	auto* Character{Cast<ACharacter>(Mesh->GetOwner())};
 
@@ -38,10 +37,10 @@ void UAlsAnimNotifyState_SetRootMotionScale::NotifyBegin(USkeletalMeshComponent*
 	}
 }
 
-void UAlsAnimNotifyState_SetRootMotionScale::NotifyEnd(USkeletalMeshComponent* Mesh, UAnimSequenceBase* Animation,
-                                                       const FAnimNotifyEventReference& EventReference)
+void UAlsAnimNotifyState_SetRootMotionScale::NotifyEnd(USkeletalMeshComponent* Mesh, UAnimSequenceBase* Sequence,
+                                                       const FAnimNotifyEventReference& NotifyEventReference)
 {
-	Super::NotifyEnd(Mesh, Animation, EventReference);
+	Super::NotifyEnd(Mesh, Sequence, NotifyEventReference);
 
 	auto* Character{Cast<ACharacter>(Mesh->GetOwner())};
 

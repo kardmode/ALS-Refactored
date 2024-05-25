@@ -8,17 +8,23 @@ public class ALSEditor : ModuleRules
 		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_3;
 
 		bEnableNonInlinedGenCppWarnings = true;
+		// UnsafeTypeCastWarningLevel = WarningLevel.Warning;
 
-		PrivateDependencyModuleNames.AddRange(new[]
+		PublicDependencyModuleNames.AddRange(new[]
 		{
 			"Core", "CoreUObject", "Engine", "AnimationModifiers", "AnimationBlueprintLibrary", "ALS"
 		});
 
 		if (Target.bBuildEditor)
 		{
+			PublicDependencyModuleNames.AddRange(new[]
+			{
+				"AnimGraph"
+			});
+
 			PrivateDependencyModuleNames.AddRange(new[]
 			{
-				"AnimGraph", "AnimGraphRuntime", "BlueprintGraph"
+				"BlueprintGraph"
 			});
 		}
 	}
