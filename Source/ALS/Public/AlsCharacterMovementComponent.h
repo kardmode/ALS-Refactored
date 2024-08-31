@@ -16,7 +16,7 @@ public:
 
 	FGameplayTag Stance{AlsStanceTags::Standing};
 
-	FGameplayTag MaxAllowedGait{AlsGaitTags::Walking};
+	FGameplayTag MaxAllowedGait{AlsGaitTags::Running};
 
 public:
 	virtual void ClientFillNetworkMoveData(const FSavedMove_Character& Move, ENetworkMoveType MoveType) override;
@@ -27,7 +27,7 @@ public:
 class ALS_API FAlsCharacterNetworkMoveDataContainer : public FCharacterNetworkMoveDataContainer
 {
 public:
-	FAlsCharacterNetworkMoveData MoveData[3]{};
+	TStaticArray<FAlsCharacterNetworkMoveData, 3> MoveData;
 
 public:
 	FAlsCharacterNetworkMoveDataContainer();
@@ -43,7 +43,7 @@ public:
 
 	FGameplayTag Stance{AlsStanceTags::Standing};
 
-	FGameplayTag MaxAllowedGait{AlsGaitTags::Walking};
+	FGameplayTag MaxAllowedGait{AlsGaitTags::Running};
 
 public:
 	virtual void Clear() override;
@@ -77,6 +77,12 @@ class ALS_API UAlsCharacterMovementComponent : public UCharacterMovementComponen
 
 	friend FAlsSavedMove;
 
+public:
+	// If checked, this improves the response to interaction from moving kinematic physical
+	// bodies, but may cause some issues when interacting with simulated physical bodies.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Settings", Transient)
+	uint8 bAllowImprovedPenetrationAdjustment : 1 {true};
+
 protected:
 	FAlsCharacterNetworkMoveDataContainer MoveDataContainer;
 
@@ -93,7 +99,13 @@ protected:
 	FGameplayTag Stance{AlsStanceTags::Standing};
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient)
-	FGameplayTag MaxAllowedGait{AlsGaitTags::Walking};
+	FGameplayTag MaxAllowedGait{AlsGaitTags::Running};
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient, Meta = (ClampMin = 0, ClampMax = 3))
+	float GaitAmount{0.0f};
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient, Meta = (ClampMin = 0, ForceUnits = "cm/s^2"))
+	float MaxAccelerationWalking{0.0f};
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "State", Transient)
 	uint8 bMovementModeLocked : 1 {false};
@@ -144,20 +156,21 @@ public:
 
 	virtual float GetMaxAcceleration() const override;
 
-	virtual float GetMaxBrakingDeceleration() const override;
-
 protected:
 	virtual void ControlledCharacterMove(const FVector& InputVector, float DeltaTime) override;
 
 public:
 	virtual void PhysicsRotation(float DeltaTime) override;
 
+	// ReSharper disable once CppRedefinitionOfDefaultArgumentInOverrideFunction
+	virtual void MoveSmooth(const FVector& InVelocity, float DeltaTime, FStepDownResult* StepDownResult = nullptr) override;
+
 protected:
-	virtual void PhysWalking(float DeltaTime, int32 Iterations) override;
+	virtual void PhysWalking(float DeltaTime, int32 IterationsCount) override;
 
-	virtual void PhysNavWalking(float DeltaTime, int32 Iterations) override;
+	virtual void PhysNavWalking(float DeltaTime, int32 IterationsCount) override;
 
-	virtual void PhysCustom(float DeltaTime, int32 Iterations) override;
+	virtual void PhysCustom(float DeltaTime, int32 IterationsCount) override;
 
 public:
 	virtual void ComputeFloorDist(const FVector& CapsuleLocation, float LineDistance, float SweepDistance, FFindFloorResult& OutFloorResult,
@@ -201,12 +214,14 @@ public:
 
 	void SetMaxAllowedGait(const FGameplayTag& NewMaxAllowedGait);
 
+	// Returns the character's current speed, mapped to the speed ranges from the movement settings.
+	// Varies from 0 to 3, where 0 is stopped, 1 is walking, 2 is running, and 3 is sprinting.
+	float GetGaitAmount() const;
+
 private:
-	void RefreshMaxWalkSpeed();
+	void RefreshGroundedMovementSettings();
 
 public:
-	float CalculateGaitAmount() const;
-
 	void SetMovementModeLocked(bool bNewMovementModeLocked);
 
 	void SetInputBlocked(bool bNewInputBlocked);
@@ -232,4 +247,14 @@ inline const FGameplayTag& UAlsCharacterMovementComponent::GetStance() const
 inline const FGameplayTag& UAlsCharacterMovementComponent::GetMaxAllowedGait() const
 {
 	return MaxAllowedGait;
+}
+
+inline void UAlsCharacterMovementComponent::SetMaxAllowedGait(const FGameplayTag& NewMaxAllowedGait)
+{
+	MaxAllowedGait = NewMaxAllowedGait;
+}
+
+inline float UAlsCharacterMovementComponent::GetGaitAmount() const
+{
+	return GaitAmount;
 }
